@@ -17,7 +17,8 @@ struct HomeTestView: View {
     @State private var showProfile = false
     @State private var currentHeroIndex: Int = 0
     @State private var logPrefillName: String = ""
-    @State private var logPrefillMeta: String = ""
+    @State private var logPrefillAddress: String = ""
+    @State private var logPrefillCuisine: CuisineType? = nil
 
     // Table data
     @State private var tableRestaurants: [SharedRestaurant] = []
@@ -89,7 +90,8 @@ struct HomeTestView: View {
             .sheet(isPresented: $showAddPlace) {
                 AddPlaceTestFlow(
                     prefillName: logPrefillName.isEmpty ? nil : logPrefillName,
-                    prefillAddress: logPrefillMeta
+                    prefillAddress: logPrefillAddress.isEmpty ? nil : logPrefillAddress,
+                    prefillCuisine: logPrefillCuisine
                 )
                 .environmentObject(store)
             }
@@ -133,18 +135,49 @@ struct HomeTestView: View {
     }
 
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("Nothing to show yet")
+        let uid = currentUid ?? ""
+        let hasOwnPlaces = !store.visitedRestaurants.isEmpty
+        let hasTableFriends = !tableMembers.filter { $0.uid != uid }.isEmpty
+        let hasTableSignal = tableRestaurants.contains { $0.userId != uid }
+
+        let title: String = {
+            if !hasOwnPlaces && !hasTableFriends { return "Nothing to show yet" }
+            if !hasOwnPlaces { return "Log a place to get picks" }
+            if !hasTableFriends { return "Invite your circle" }
+            if !hasTableSignal { return "Waiting on your circle" }
+            return "Nothing to show yet"
+        }()
+
+        let body: String = {
+            if !hasOwnPlaces && !hasTableFriends {
+                return "Log a few places or invite your circle \u{2014} ForkBook gets sharper with every entry."
+            }
+            if !hasOwnPlaces {
+                return "Your circle has logs, but we need yours too. Add a place you\u{2019}ve been."
+            }
+            if !hasTableFriends {
+                return "Picks get much stronger with a few trusted friends logging too."
+            }
+            if !hasTableSignal {
+                return "Your circle hasn\u{2019}t logged anything recent. Nudge them to share what they\u{2019}ve been eating."
+            }
+            return "Log a few places you\u{2019}ve been and ForkBook will start surfacing what to get tonight."
+        }()
+
+        let ctaLabel = hasOwnPlaces && !hasTableFriends ? "Add a place anyway" : "Add a place"
+
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(title)
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(Color.fbText)
-            Text("Log a few places you\u{2019}ve been and ForkBook will start surfacing what to get tonight.")
+            Text(body)
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
             Button {
                 showAddPlace = true
             } label: {
-                Text("Add a place")
+                Text(ctaLabel)
                     .font(.system(size: 14, weight: .bold))
                     .foregroundStyle(Color.fbText)
                     .padding(.horizontal, 18)
@@ -337,6 +370,41 @@ struct HomeTestView: View {
         }
     }
 
+    /// Populate logPrefill state from a hero, preferring real data from the
+    /// user's own store, then table, falling back to best-effort from meta.
+    private func prefillLog(for hero: HeroCardData) {
+        logPrefillName = hero.restaurant
+        let nameKey = hero.restaurant.lowercased()
+
+        if let mine = store.restaurants.first(where: {
+            $0.name.lowercased() == nameKey
+        }) {
+            logPrefillAddress = mine.address
+            logPrefillCuisine = mine.cuisine
+            return
+        }
+        if let table = tableRestaurants.first(where: {
+            $0.name.lowercased() == nameKey
+        }) {
+            logPrefillAddress = table.address
+            logPrefillCuisine = table.cuisine
+            return
+        }
+        // Best-effort: first meta segment may be cuisine
+        let firstMeta = hero.meta
+            .components(separatedBy: "\u{00B7}")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .first
+        if let firstMeta, let match = CuisineType.allCases.first(where: {
+            $0.rawValue.caseInsensitiveCompare(firstMeta) == .orderedSame
+        }) {
+            logPrefillCuisine = match
+        } else {
+            logPrefillCuisine = nil
+        }
+        logPrefillAddress = ""
+    }
+
     /// Open the hero's restaurant in Apple Maps.
     /// Uses a search query of "name city" so Maps finds the right place,
     /// falling back to just name if city can't be derived from meta.
@@ -476,8 +544,7 @@ struct HomeTestView: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                logPrefillName = hero.restaurant
-                logPrefillMeta = hero.meta
+                prefillLog(for: hero)
                 selectedHero = nil
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
                     showAddPlace = true

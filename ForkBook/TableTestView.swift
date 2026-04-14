@@ -159,7 +159,7 @@ struct TableTestView: View {
     }
 
     private var emptyPeopleState: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             sectionLabel("YOUR PEOPLE")
 
             Text("Your table is empty")
@@ -170,6 +170,21 @@ struct TableTestView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(hex: "B0B0B4"))
                 .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                showInviteSheet = true
+            } label: {
+                Text("Invite people")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.fbText)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.fbWarm.opacity(0.18)))
+                    .overlay(Capsule().stroke(Color.fbWarm.opacity(0.35), lineWidth: 1))
+            }
+            .padding(.top, 4)
+            .buttonStyle(TableCardPressStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
