@@ -1,89 +1,33 @@
 import SwiftUI
+import FirebaseAuth
 
-// MARK: - Table Test View (V4 — Utility First)
+// MARK: - Table Test View (V4 — Utility First, real data)
 //
-// Three sections, in order:
-//   1. Trust for…        -- the core job: who to ask for what
-//   2. Your people       -- compact rows, one hint line each
-//   3. Changed confidence -- sharp low-volume signal, not a feed
+// Three sections:
+//   1. Trust for…        -- occasion → trusted person
+//   2. Your people       -- compact rows, derived descriptor + hint
+//   3. Changed confidence -- recent table activity
+//
+// Backed by Firestore circle members + SharedRestaurants.
 
 struct TableTestView: View {
+    @EnvironmentObject var store: RestaurantStore
     @State private var showInviteSheet = false
+    @State private var hasLoaded = false
+    @State private var tableMembers: [FirestoreService.CircleMember] = []
+    @State private var tableRestaurants: [SharedRestaurant] = []
+    private let firestoreService = FirestoreService.shared
 
-    // MARK: Sample Data
+    private var currentUid: String? { Auth.auth().currentUser?.uid }
 
-    private let trustMap: [TrustPair] = [
-        TrustPair(category: "Date night",   person: "Priya"),
-        TrustPair(category: "Lunch",        person: "Raj"),
-        TrustPair(category: "New spots",    person: "Maya"),
-        TrustPair(category: "Group dinner", person: "Ankit")
-    ]
+    // Only friends (exclude self)
+    private var friendEntries: [SharedRestaurant] {
+        tableRestaurants.filter { $0.userId != currentUid }
+    }
 
-    private let people: [TablePerson] = [
-        TablePerson(
-            initial: "P",
-            name: "Priya",
-            descriptor: "Polished sushi and special occasions.",
-            hint: "You usually agree."
-        ),
-        TablePerson(
-            initial: "R",
-            name: "Raj",
-            descriptor: "Dependable for lunch and Indian.",
-            hint: "Often goes, rarely misses."
-        ),
-        TablePerson(
-            initial: "M",
-            name: "Maya",
-            descriptor: "Finds places early.",
-            hint: "Useful when you want something new."
-        ),
-        TablePerson(
-            initial: "A",
-            name: "Ankit",
-            descriptor: "Best when a group dinner needs to work.",
-            hint: "You've gone to 5 of his picks."
-        ),
-        TablePerson(
-            initial: "L",
-            name: "Lena",
-            descriptor: "Brunch, pastry, and slower weekends.",
-            hint: "You loved 4 of her 6 picks."
-        ),
-        TablePerson(
-            initial: "S",
-            name: "Sam",
-            descriptor: "Ramen, tacos, late-night food.",
-            hint: "You agreed on 6 places."
-        )
-    ]
-
-    private let signals: [ConfidenceSignal] = [
-        ConfidenceSignal(
-            name: "Priya",
-            action: "marked the omakase amazing again at",
-            place: "Ju-Ni",
-            timeAgo: "2d"
-        ),
-        ConfidenceSignal(
-            name: "Raj",
-            action: "went back to",
-            place: "Dosa Point",
-            timeAgo: "4d"
-        ),
-        ConfidenceSignal(
-            name: "Maya",
-            action: "saved",
-            place: "Flour + Water",
-            timeAgo: "5d"
-        ),
-        ConfidenceSignal(
-            name: "Ankit",
-            action: "booked a table at",
-            place: "Cotogna",
-            timeAgo: "1w"
-        )
-    ]
+    private var friends: [FirestoreService.CircleMember] {
+        tableMembers.filter { $0.uid != currentUid }
+    }
 
     // MARK: Body
 
@@ -97,14 +41,27 @@ struct TableTestView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 8)
 
-                    trustForSection
-                        .padding(.horizontal, 20)
+                    let trust = trustMap
+                    let people = derivedPeople
+                    let changes = derivedSignals
 
-                    yourPeopleSection
-                        .padding(.horizontal, 20)
+                    if !trust.isEmpty {
+                        trustForSection(trust)
+                            .padding(.horizontal, 20)
+                    }
 
-                    changedConfidenceSection
-                        .padding(.horizontal, 20)
+                    if !people.isEmpty {
+                        yourPeopleSection(people)
+                            .padding(.horizontal, 20)
+                    } else {
+                        emptyPeopleState
+                            .padding(.horizontal, 20)
+                    }
+
+                    if !changes.isEmpty {
+                        changedConfidenceSection(changes)
+                            .padding(.horizontal, 20)
+                    }
 
                     Color.clear.frame(height: 40)
                 }
@@ -113,6 +70,11 @@ struct TableTestView: View {
         }
         .sheet(isPresented: $showInviteSheet) {
             InvitePlaceholderSheet()
+        }
+        .task {
+            guard !hasLoaded else { return }
+            hasLoaded = true
+            await loadTable()
         }
     }
 
@@ -155,15 +117,15 @@ struct TableTestView: View {
 
     // MARK: Section 1 — Trust for…
 
-    private var trustForSection: some View {
+    private func trustForSection(_ trust: [TrustPair]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("TRUST FOR…")
+            sectionLabel("TRUST FOR\u{2026}")
 
             VStack(spacing: 0) {
-                ForEach(Array(trustMap.enumerated()), id: \.offset) { index, pair in
+                ForEach(Array(trust.enumerated()), id: \.offset) { index, pair in
                     TrustShortcutRow(pair: pair)
 
-                    if index < trustMap.count - 1 {
+                    if index < trust.count - 1 {
                         Rectangle()
                             .fill(Color.white.opacity(0.04))
                             .frame(height: 0.5)
@@ -184,7 +146,7 @@ struct TableTestView: View {
 
     // MARK: Section 2 — Your people
 
-    private var yourPeopleSection: some View {
+    private func yourPeopleSection(_ people: [TablePerson]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionLabel("YOUR PEOPLE")
 
@@ -196,9 +158,25 @@ struct TableTestView: View {
         }
     }
 
+    private var emptyPeopleState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            sectionLabel("YOUR PEOPLE")
+
+            Text("Your table is empty")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundStyle(Color.fbText)
+
+            Text("Invite 3\u{2013}5 people whose taste you trust. Once they log a place, they\u{2019}ll show up here with the areas they\u{2019}re strongest in.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4"))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     // MARK: Section 3 — Changed confidence
 
-    private var changedConfidenceSection: some View {
+    private func changedConfidenceSection(_ signals: [ConfidenceSignal]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             sectionLabel("CHANGED CONFIDENCE")
 
@@ -224,6 +202,293 @@ struct TableTestView: View {
             .font(.system(size: 11, weight: .bold))
             .tracking(1.4)
             .foregroundStyle(Color(hex: "8E8E93"))
+    }
+
+    // =========================================================================
+    // MARK: - Data Loading
+    // =========================================================================
+
+    private func loadTable() async {
+        let circles = await firestoreService.getMyCircles()
+        guard let circle = circles.first else { return }
+        let members = await firestoreService.getCircleMembers(circle: circle)
+        let restaurants = await firestoreService.getCircleRestaurants(circleId: circle.id)
+        let memberMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
+        var enriched = restaurants
+        for i in enriched.indices {
+            enriched[i].userName = memberMap[enriched[i].userId] ?? "Friend"
+        }
+        self.tableMembers = members
+        self.tableRestaurants = enriched
+    }
+
+    // =========================================================================
+    // MARK: - Derived Data
+    // =========================================================================
+
+    /// For each occasion category, pick the member with the strongest signal.
+    private var trustMap: [TrustPair] {
+        guard !friends.isEmpty, !friendEntries.isEmpty else { return [] }
+
+        // Define categories with a heuristic (cuisines most associated with that occasion)
+        struct CategorySpec {
+            let label: String
+            let dishyCuisines: Set<CuisineType>
+            /// Priority scorer: higher count is better
+            let score: (SharedRestaurant) -> Int
+        }
+
+        let specs: [CategorySpec] = [
+            CategorySpec(
+                label: "Date night",
+                dishyCuisines: [.french, .italian, .japanese, .mediterranean],
+                score: { r in
+                    (Set([CuisineType.french, .italian, .japanese, .mediterranean]).contains(r.cuisine) ? 3 : 0)
+                    + (r.rating >= 5 ? 2 : (r.rating >= 3 ? 1 : 0))
+                }
+            ),
+            CategorySpec(
+                label: "Lunch",
+                dishyCuisines: [.indian, .vietnamese, .thai, .mexican, .american, .chinese, .korean],
+                score: { r in
+                    (Set([CuisineType.indian, .vietnamese, .thai, .mexican, .american, .chinese, .korean]).contains(r.cuisine) ? 3 : 0)
+                    + max(0, r.visitCount - 1)
+                }
+            ),
+            CategorySpec(
+                label: "New spots",
+                dishyCuisines: [],
+                score: { r in
+                    guard let d = r.dateVisited else { return 0 }
+                    let days = Calendar.current.dateComponents([.day], from: d, to: Date()).day ?? 999
+                    if days <= 14 { return 4 }
+                    if days <= 30 { return 2 }
+                    return 0
+                }
+            ),
+            CategorySpec(
+                label: "Group dinner",
+                dishyCuisines: [.italian, .chinese, .mexican, .american, .mediterranean],
+                score: { r in
+                    (Set([CuisineType.italian, .chinese, .mexican, .american, .mediterranean]).contains(r.cuisine) ? 2 : 0)
+                    + (r.visitCount >= 2 ? 2 : 0)
+                    + (r.rating >= 4 ? 1 : 0)
+                }
+            )
+        ]
+
+        var out: [TrustPair] = []
+        var usedMembers = Set<String>()
+
+        for spec in specs {
+            // Tally per member
+            var tally: [String: Int] = [:]
+            for r in friendEntries {
+                tally[r.userId, default: 0] += spec.score(r)
+            }
+            // Filter already-used members so each person owns at most one category
+            let candidates = tally
+                .filter { $0.value > 0 }
+                .filter { !usedMembers.contains($0.key) }
+                .sorted { $0.value > $1.value }
+
+            guard let top = candidates.first else { continue }
+            let member = tableMembers.first(where: { $0.uid == top.key })
+            let name = shortName(member?.displayName ?? "Friend")
+            out.append(TrustPair(category: spec.label, person: name))
+            usedMembers.insert(top.key)
+        }
+
+        return out
+    }
+
+    /// Derive a descriptor + hint for each friend.
+    private var derivedPeople: [TablePerson] {
+        friends.map { member in
+            let theirEntries = friendEntries.filter { $0.userId == member.uid }
+            let name = shortName(member.displayName)
+            let initial = name.first.map(String.init) ?? "?"
+
+            let descriptor = descriptorText(for: theirEntries)
+            let hint = hintText(member: member, entries: theirEntries)
+
+            return TablePerson(
+                initial: initial,
+                name: name,
+                descriptor: descriptor,
+                hint: hint
+            )
+        }
+    }
+
+    private func descriptorText(for entries: [SharedRestaurant]) -> String {
+        guard !entries.isEmpty else { return "No places logged yet." }
+
+        // Top cuisines
+        let cuisineCounts = Dictionary(grouping: entries.filter { $0.cuisine != .other }, by: { $0.cuisine })
+            .mapValues { $0.count }
+            .sorted { $0.value > $1.value }
+
+        if let top = cuisineCounts.first, cuisineCounts.count >= 2 {
+            let second = cuisineCounts[1]
+            if top.value >= 2 && second.value >= 2 {
+                return "Dependable for \(top.key.rawValue.lowercased()) and \(second.key.rawValue.lowercased())."
+            }
+            return "Strong on \(top.key.rawValue.lowercased())."
+        }
+        if let top = cuisineCounts.first {
+            return "Strong on \(top.key.rawValue.lowercased())."
+        }
+        return "Has logged \(entries.count) place\(entries.count == 1 ? "" : "s")."
+    }
+
+    private func hintText(member: FirestoreService.CircleMember, entries: [SharedRestaurant]) -> String {
+        // Overlap with user's places by name
+        let myNames = Set(store.restaurants.map { $0.name.lowercased() })
+        let theirNames = Set(entries.map { $0.name.lowercased() })
+        let overlap = myNames.intersection(theirNames)
+
+        // How many of their picks has the user loved/liked?
+        let myLoved = store.visitedRestaurants.filter {
+            ($0.reaction == .loved || $0.reaction == .liked) &&
+            theirNames.contains($0.name.lowercased())
+        }
+
+        if myLoved.count >= 3 {
+            return "You\u{2019}ve loved \(myLoved.count) of their picks."
+        }
+        if overlap.count >= 3 {
+            return "You agree on \(overlap.count) places."
+        }
+        if overlap.count >= 1 {
+            return "You overlap on \(overlap.count) place\(overlap.count == 1 ? "" : "s")."
+        }
+        if entries.isEmpty {
+            return "Nothing logged yet."
+        }
+        return "Useful when you want something new."
+    }
+
+    /// Recent table activity → scored confidence signals.
+    /// Signal types scored by interestingness + recency:
+    ///  - Dish consensus (≥2 members love same dish at same place) — highest
+    ///  - Friend repeat visit (visitCount >= 2)
+    ///  - Friend 5-star / go-to equivalent
+    ///  - Overlap with your log (friend tried a place you also have)
+    ///  - Fresh log
+    private var derivedSignals: [ConfidenceSignal] {
+        let myNames = Set(store.restaurants.map { $0.name.lowercased() })
+        let byPlace = Dictionary(grouping: friendEntries, by: { $0.name.lowercased() })
+
+        struct ScoredSignal {
+            let signal: ConfidenceSignal
+            let score: Int
+            let date: Date
+        }
+
+        var out: [ScoredSignal] = []
+
+        // Dish consensus per place
+        for (_, entries) in byPlace {
+            guard let ref = entries.first else { continue }
+            let dishVotes = entries.flatMap { $0.likedDishes.map { $0.name.lowercased() } }
+            let counts = Dictionary(grouping: dishVotes, by: { $0 })
+                .mapValues { $0.count }
+                .filter { $0.value >= 2 }
+                .sorted { $0.value > $1.value }
+
+            if let top = counts.first {
+                let latest = entries.compactMap { $0.dateVisited }.max() ?? Date.distantPast
+                let recencyBoost = daysAgo(latest) <= 14 ? 10 : 0
+                out.append(ScoredSignal(
+                    signal: ConfidenceSignal(
+                        name: "Table consensus",
+                        action: "\(top.value) at your table love the \(top.key) at",
+                        place: ref.name,
+                        timeAgo: timeAgo(latest)
+                    ),
+                    score: 25 + recencyBoost,
+                    date: latest
+                ))
+            }
+        }
+
+        // Per-entry signals
+        for r in friendEntries {
+            guard let d = r.dateVisited else { continue }
+            let days = daysAgo(d)
+            let name = shortName(r.userName)
+            let isOverlap = myNames.contains(r.name.lowercased())
+
+            let action: String
+            var score: Int
+
+            if r.rating >= 5, let topDish = r.likedDishes.first?.name {
+                action = "loved the \(topDish.lowercased()) at"
+                score = 22
+            } else if r.rating >= 5 {
+                action = "loved"
+                score = 18
+            } else if r.visitCount >= 2 {
+                action = "went back to"
+                score = 20
+            } else if isOverlap {
+                action = "also logged"
+                score = 14
+            } else if r.rating >= 3 {
+                action = "logged"
+                score = 8
+            } else {
+                action = "tried"
+                score = 5
+            }
+
+            if days <= 3 { score += 8 }
+            else if days <= 7 { score += 5 }
+            else if days <= 14 { score += 2 }
+
+            out.append(ScoredSignal(
+                signal: ConfidenceSignal(
+                    name: name,
+                    action: action,
+                    place: r.name,
+                    timeAgo: timeAgo(d)
+                ),
+                score: score,
+                date: d
+            ))
+        }
+
+        // Dedup by (name|place) keeping highest score
+        var seen: [String: ScoredSignal] = [:]
+        for s in out {
+            let key = "\(s.signal.name.lowercased())|\(s.signal.place.lowercased())"
+            if let existing = seen[key], existing.score >= s.score { continue }
+            seen[key] = s
+        }
+
+        return seen.values
+            .sorted { ($0.score, $0.date) > ($1.score, $1.date) }
+            .prefix(4)
+            .map { $0.signal }
+    }
+
+    private func daysAgo(_ date: Date) -> Int {
+        Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 999
+    }
+
+    private func timeAgo(_ date: Date?) -> String {
+        guard let date else { return "" }
+        let days = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 0
+        if days <= 0 { return "today" }
+        if days == 1 { return "1d" }
+        if days < 7 { return "\(days)d" }
+        if days < 30 { return "\(days / 7)w" }
+        return "\(days / 30)mo"
+    }
+
+    private func shortName(_ full: String) -> String {
+        full.components(separatedBy: " ").first ?? full
     }
 }
 
@@ -264,7 +529,7 @@ private struct TrustShortcutRow: View {
 
                 Spacer()
 
-                Text("→")
+                Text("\u{2192}")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color(hex: "6B6B70"))
 
@@ -394,7 +659,7 @@ private struct InvitePlaceholderSheet: View {
                     .font(.system(size: 22, weight: .heavy))
                     .foregroundStyle(Color.fbText)
 
-                Text("Your table works best with 3–5 people whose taste you already trust. Share a quick invite via text.")
+                Text("Your table works best with 3\u{2013}5 people whose taste you already trust. Share a quick invite via text.")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color(hex: "8E8E93"))
                     .fixedSize(horizontal: false, vertical: true)
@@ -453,5 +718,6 @@ private struct TableCardPressStyle: ButtonStyle {
 
 #Preview {
     TableTestView()
+        .environmentObject(RestaurantStore())
         .preferredColorScheme(.dark)
 }

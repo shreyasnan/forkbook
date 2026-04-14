@@ -1,23 +1,26 @@
 import SwiftUI
 import FirebaseAuth
 
-// MARK: - My Places Test View (V2 — Memory-first, query-led)
+// MARK: - My Places Test View (V2 — Memory-first, query-led, real data)
 //
 // Three routes:
 //   .home       — "Ask from memory": search bar, suggested queries, quick access places
 //   .place      — Place memory: warm hero, visits, what to remember, actions
 //   .city       — City recommendations summary
 //
-// Replaces the earlier memory-scoring prototype.
+// Backed by RestaurantStore.
 
 struct MyPlacesTestView: View {
+    @EnvironmentObject var store: RestaurantStore
     @State private var route: Route = .home
+    @State private var query: String = ""
+    @FocusState private var searchFocused: Bool
 
     // MARK: Routes
 
     enum Route: Equatable {
         case home
-        case place(String)   // keyed by place id
+        case place(String)   // Restaurant.id.uuidString
         case city(String)    // city name
     }
 
@@ -34,8 +37,10 @@ struct MyPlacesTestView: View {
                 case .home:
                     homeScreen
                 case .place(let id):
-                    if let place = placeLookup[id] {
-                        placeDetailScreen(place)
+                    if let restaurant = restaurantByIdString(id) {
+                        placeDetailScreen(memory(from: restaurant))
+                    } else {
+                        emptyRouteFallback
                     }
                 case .city(let name):
                     cityScreen(name)
@@ -57,32 +62,167 @@ struct MyPlacesTestView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
 
-                chipsRow
-                    .padding(.top, 12)
+                if !query.trimmingCharacters(in: .whitespaces).isEmpty {
+                    searchResultsSection
+                        .padding(.top, 18)
+                } else {
+                    chipsRow
+                        .padding(.top, 12)
 
-                sectionLabel("YOU MIGHT ASK")
-                    .padding(.top, 24)
+                    if !suggestedQueries.isEmpty {
+                        sectionLabel("YOU MIGHT ASK")
+                            .padding(.top, 24)
 
-                VStack(spacing: 10) {
-                    ForEach(suggestedQueries) { query in
-                        queryRow(query)
+                        VStack(spacing: 10) {
+                            ForEach(suggestedQueries) { q in
+                                queryRow(q)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    if !quickAccessPlaces.isEmpty {
+                        sectionLabel("QUICK ACCESS")
+                            .padding(.top, 24)
+
+                        VStack(spacing: 10) {
+                            ForEach(quickAccessPlaces) { place in
+                                quickPlaceRow(place)
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    if store.visitedRestaurants.isEmpty {
+                        emptyState
+                            .padding(.top, 40)
                     }
                 }
-                .padding(.horizontal, 16)
-
-                sectionLabel("QUICK ACCESS")
-                    .padding(.top, 24)
-
-                VStack(spacing: 10) {
-                    ForEach(quickAccessPlaces) { place in
-                        quickPlaceRow(place)
-                    }
-                }
-                .padding(.horizontal, 16)
 
                 Spacer(minLength: 80)
             }
         }
+    }
+
+    // Empty state when no visited restaurants
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Nothing logged yet")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Color.fbText)
+            Text("Add places you\u{2019}ve been and ForkBook will help you remember what you loved.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+    }
+
+    private var emptyRouteFallback: some View {
+        VStack {
+            Spacer()
+            Text("Place not found.")
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4"))
+            Button("Back") { navigate(.home) }
+                .padding(.top, 8)
+                .foregroundStyle(Color.fbWarm)
+            Spacer()
+        }
+    }
+
+    // =========================================================================
+    // MARK: - Search Results Section (live)
+    // =========================================================================
+
+    private var searchResultsSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if searchResults.isEmpty {
+                Text("No matches")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Color(hex: "6B6B70"))
+                    .padding(.horizontal, 22)
+            } else {
+                ForEach(searchResults) { result in
+                    queryRow(result)
+                }
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // Compose live suggestions from real data
+    private var searchResults: [SuggestedQuery] {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard !q.isEmpty else { return [] }
+        var out: [SuggestedQuery] = []
+
+        // Explicit best-in-city pattern
+        if q.hasPrefix("best in ") || q.hasPrefix("best places in ") {
+            let city = q.replacingOccurrences(of: "best places in ", with: "")
+                        .replacingOccurrences(of: "best in ", with: "")
+                        .trimmingCharacters(in: .whitespaces)
+            if !city.isEmpty {
+                out.append(SuggestedQuery(
+                    question: "Best in \(city.capitalized)?",
+                    answerPreview: answerPreview(forCity: city),
+                    target: .city(city.capitalized)
+                ))
+            }
+        }
+
+        // Match by restaurant name
+        for r in store.visitedRestaurants {
+            if r.name.lowercased().contains(q) {
+                out.append(SuggestedQuery(
+                    question: "Have I been to \(r.name)?",
+                    answerPreview: "\(r.visitCount) visit\(r.visitCount == 1 ? "" : "s") \u{00B7} \(ratingText(for: r))",
+                    target: .place(r.id.uuidString)
+                ))
+            }
+        }
+
+        // Match by dish
+        for r in store.visitedRestaurants {
+            if let dish = r.likedDishes.first(where: { $0.name.lowercased().contains(q) }) {
+                let exists = out.contains(where: {
+                    if case .place(let pid) = $0.target { return pid == r.id.uuidString }
+                    return false
+                })
+                if !exists {
+                    out.append(SuggestedQuery(
+                        question: "Had \(dish.name) at \(r.name)",
+                        answerPreview: ratingText(for: r),
+                        target: .place(r.id.uuidString)
+                    ))
+                }
+            }
+        }
+
+        // Match by city
+        let cities = uniqueCities.filter { $0.lowercased().contains(q) }
+        for city in cities.prefix(3) {
+            let exists = out.contains(where: {
+                if case .city(let c) = $0.target { return c.lowercased() == city.lowercased() }
+                return false
+            })
+            if !exists {
+                out.append(SuggestedQuery(
+                    question: "Best in \(city)?",
+                    answerPreview: answerPreview(forCity: city),
+                    target: .city(city)
+                ))
+            }
+        }
+
+        return Array(out.prefix(6))
+    }
+
+    private func answerPreview(forCity city: String) -> String {
+        let topNames = topPicks(in: city).prefix(3).map(\.name)
+        if topNames.isEmpty { return "No places yet" }
+        return topNames.joined(separator: ", ")
     }
 
     // =========================================================================
@@ -101,21 +241,25 @@ struct MyPlacesTestView: View {
                     .padding(.horizontal, 16)
                     .padding(.top, 18)
 
-                sectionLabel("WHAT YOU ATE")
-                    .padding(.top, 26)
+                if !place.visits.isEmpty {
+                    sectionLabel("WHAT YOU ATE")
+                        .padding(.top, 26)
 
-                VStack(spacing: 10) {
-                    ForEach(place.visits) { visit in
-                        visitCard(visit)
+                    VStack(spacing: 10) {
+                        ForEach(place.visits) { visit in
+                            visitCard(visit)
+                        }
                     }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
 
                 sectionLabel("WHAT TO REMEMBER")
                     .padding(.top, 26)
 
                 VStack(spacing: 10) {
-                    memoryRow(name: "Most repeated", detail: place.mostRepeated)
+                    if !place.mostRepeated.isEmpty {
+                        memoryRow(name: "Standout dish", detail: place.mostRepeated)
+                    }
                     memoryRow(name: "Recommendation confidence", detail: place.confidence)
                 }
                 .padding(.horizontal, 16)
@@ -147,25 +291,40 @@ struct MyPlacesTestView: View {
 
                 headerBlock(title: name, subtitle: "Your recommendations")
 
-                sectionLabel("TOP PICKS")
-                    .padding(.top, 10)
+                let top = topPicks(in: name)
+                let also = alsoGood(in: name)
 
-                VStack(spacing: 10) {
-                    ForEach(topPicks(in: name)) { place in
-                        quickPlaceRow(place)
-                    }
+                if top.isEmpty && also.isEmpty {
+                    Text("No places in \(name) yet.")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .padding(.horizontal, 22)
+                        .padding(.top, 20)
                 }
-                .padding(.horizontal, 16)
 
-                sectionLabel("ALSO GOOD")
-                    .padding(.top, 24)
+                if !top.isEmpty {
+                    sectionLabel("TOP PICKS")
+                        .padding(.top, 10)
 
-                VStack(spacing: 10) {
-                    ForEach(alsoGood(in: name)) { place in
-                        quickPlaceRow(place)
+                    VStack(spacing: 10) {
+                        ForEach(top) { place in
+                            quickPlaceRow(place)
+                        }
                     }
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
+
+                if !also.isEmpty {
+                    sectionLabel("ALSO GOOD")
+                        .padding(.top, 24)
+
+                    VStack(spacing: 10) {
+                        ForEach(also) { place in
+                            quickPlaceRow(place)
+                        }
+                    }
+                    .padding(.horizontal, 16)
+                }
 
                 Spacer(minLength: 80)
             }
@@ -227,11 +386,31 @@ struct MyPlacesTestView: View {
                 .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(Color(hex: "8E8E93"))
 
-            Text("Ask about places, dishes, cities")
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(hex: "B0B0B4"))
+            TextField(
+                "",
+                text: $query,
+                prompt: Text("Ask about places, dishes, cities")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundColor(Color(hex: "B0B0B4"))
+            )
+            .focused($searchFocused)
+            .font(.system(size: 14, weight: .medium))
+            .foregroundStyle(Color.fbText)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled(true)
+            .submitLabel(.search)
+            .onSubmit { handleSubmit() }
 
-            Spacer()
+            if !query.isEmpty {
+                Button {
+                    query = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundStyle(Color(hex: "6B6B70"))
+                }
+                .buttonStyle(MyPlacesPressStyle())
+            }
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 13)
@@ -246,27 +425,50 @@ struct MyPlacesTestView: View {
         .contentShape(Rectangle())
     }
 
+    private func handleSubmit() {
+        if let first = searchResults.first {
+            navigate(first.target)
+            query = ""
+            searchFocused = false
+        }
+    }
+
     private var chipsRow: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                chip(
-                    label: "Have I been to Ju-Ni?",
-                    active: true,
-                    action: { navigate(.place(juNi.id)) }
-                )
-                chip(
-                    label: "What did I eat at Flour + Water?",
-                    active: false,
-                    action: { navigate(.place(flourWater.id)) }
-                )
-                chip(
-                    label: "Best places in SF?",
-                    active: false,
-                    action: { navigate(.city("San Francisco")) }
-                )
+                ForEach(Array(chipSpecs().enumerated()), id: \.offset) { idx, spec in
+                    chip(
+                        label: spec.label,
+                        active: idx == 0,
+                        action: { navigate(spec.target) }
+                    )
+                }
             }
             .padding(.horizontal, 16)
         }
+    }
+
+    private struct ChipSpec {
+        let label: String
+        let target: Route
+    }
+
+    private func chipSpecs() -> [ChipSpec] {
+        var out: [ChipSpec] = []
+        let top = store.visitedByRelationship.prefix(2)
+        for r in top {
+            out.append(ChipSpec(
+                label: "Have I been to \(r.name)?",
+                target: .place(r.id.uuidString)
+            ))
+        }
+        if let topCity = uniqueCities.first {
+            out.append(ChipSpec(
+                label: "Best in \(topCity)?",
+                target: .city(topCity)
+            ))
+        }
+        return out
     }
 
     private func chip(label: String, active: Bool, action: @escaping () -> Void) -> some View {
@@ -298,17 +500,19 @@ struct MyPlacesTestView: View {
     // MARK: - Rows
     // =========================================================================
 
-    private func queryRow(_ query: SuggestedQuery) -> some View {
+    private func queryRow(_ queryItem: SuggestedQuery) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            navigate(query.target)
+            query = ""
+            searchFocused = false
+            navigate(queryItem.target)
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                Text(query.question)
+                Text(queryItem.question)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.fbText)
 
-                Text(query.answerPreview)
+                Text(queryItem.answerPreview)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
                     .lineLimit(1)
@@ -345,15 +549,19 @@ struct MyPlacesTestView: View {
                 }
                 .padding(.bottom, 4)
 
-                Text(place.rating)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.fbWarm)
-                    .padding(.bottom, 4)
+                if !place.rating.isEmpty {
+                    Text(place.rating)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.fbWarm)
+                        .padding(.bottom, 4)
+                }
 
-                Text(place.dishes)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
-                    .lineLimit(1)
+                if !place.dishes.isEmpty {
+                    Text(place.dishes)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
+                        .lineLimit(1)
+                }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 16)
@@ -418,11 +626,13 @@ struct MyPlacesTestView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(.bottom, 8)
 
-            Text(place.summarySub)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(Color(hex: "B0B0B4"))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.bottom, 12)
+            if !place.summarySub.isEmpty {
+                Text(place.summarySub)
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color(hex: "B0B0B4"))
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.bottom, 12)
+            }
 
             Text(place.heroNote)
                 .font(.system(size: 13, weight: .semibold))
@@ -473,29 +683,31 @@ struct MyPlacesTestView: View {
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Color(hex: "6B6B70"))
             }
-            .padding(.bottom, 10)
+            .padding(.bottom, visit.dishes.isEmpty ? 0 : 10)
 
-            VStack(spacing: 8) {
-                ForEach(visit.dishes) { dish in
-                    HStack {
-                        Text(dish.name)
-                            .font(.system(size: 14, weight: .semibold))
-                            .foregroundStyle(Color.fbText)
-                        Spacer()
-                        Text(dish.rating)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.fbWarm)
+            if !visit.dishes.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(visit.dishes) { dish in
+                        HStack {
+                            Text(dish.name)
+                                .font(.system(size: 14, weight: .semibold))
+                                .foregroundStyle(Color.fbText)
+                            Spacer()
+                            Text(dish.rating)
+                                .font(.system(size: 12, weight: .bold))
+                                .foregroundStyle(Color.fbWarm)
+                        }
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 10)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .fill(Color.white.opacity(0.03))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                        )
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .fill(Color.white.opacity(0.03))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .stroke(Color.white.opacity(0.05), lineWidth: 1)
-                    )
                 }
             }
         }
@@ -551,130 +763,173 @@ struct MyPlacesTestView: View {
     }
 
     // =========================================================================
-    // MARK: - Sample Data
+    // MARK: - Data Derivation (from RestaurantStore)
     // =========================================================================
 
-    private var placeLookup: [String: PlaceMemory] {
-        var map: [String: PlaceMemory] = [:]
-        for place in allPlaces { map[place.id] = place }
-        return map
+    private func restaurantByIdString(_ idString: String) -> Restaurant? {
+        guard let uuid = UUID(uuidString: idString) else { return nil }
+        return store.restaurants.first(where: { $0.id == uuid })
     }
 
-    private var allPlaces: [PlaceMemory] {
-        [juNi, flourWater, tartine]
+    private var uniqueCities: [String] {
+        var seen = Set<String>()
+        var out: [String] = []
+        // Order by frequency (descending) so the most-visited city comes first
+        let counts = store.visitedRestaurants.reduce(into: [String: Int]()) { dict, r in
+            let c = r.city
+            guard !c.isEmpty else { return }
+            dict[c, default: 0] += 1
+        }
+        let ordered = counts.sorted { $0.value > $1.value }.map(\.key)
+        for c in ordered {
+            if !seen.contains(c.lowercased()) {
+                seen.insert(c.lowercased())
+                out.append(c)
+            }
+        }
+        return out
     }
 
     private var suggestedQueries: [SuggestedQuery] {
-        [
-            SuggestedQuery(
-                question: "Have I been to Ju-Ni?",
-                answerPreview: "2 visits \u{00B7} amazing",
-                target: .place(juNi.id)
-            ),
-            SuggestedQuery(
-                question: "What did I eat at Tartine?",
-                answerPreview: "Morning bun \u{00B7} 1 visit",
-                target: .place(tartine.id)
-            ),
-            SuggestedQuery(
-                question: "What should I recommend in San Francisco?",
-                answerPreview: "Ju-Ni, Flour + Water, Tartine",
-                target: .city("San Francisco")
-            )
-        ]
+        let top = Array(store.visitedByRelationship.prefix(3))
+        var out: [SuggestedQuery] = []
+        for (idx, r) in top.enumerated() {
+            if idx == 1, let lead = r.leadDish {
+                out.append(SuggestedQuery(
+                    question: "What did I eat at \(r.name)?",
+                    answerPreview: "\(lead.name) \u{00B7} \(r.visitCount) visit\(r.visitCount == 1 ? "" : "s")",
+                    target: .place(r.id.uuidString)
+                ))
+            } else {
+                out.append(SuggestedQuery(
+                    question: "Have I been to \(r.name)?",
+                    answerPreview: "\(r.visitCount) visit\(r.visitCount == 1 ? "" : "s") \u{00B7} \(ratingText(for: r))",
+                    target: .place(r.id.uuidString)
+                ))
+            }
+        }
+        if let topCity = uniqueCities.first {
+            let preview = answerPreview(forCity: topCity)
+            out.append(SuggestedQuery(
+                question: "What should I recommend in \(topCity)?",
+                answerPreview: preview,
+                target: .city(topCity)
+            ))
+        }
+        return out
     }
 
     private var quickAccessPlaces: [PlaceMemory] {
-        [juNi, flourWater]
+        Array(store.visitedByRelationship.prefix(3)).map { memory(from: $0) }
     }
 
     private func topPicks(in city: String) -> [PlaceMemory] {
-        [juNi, flourWater]
+        let lower = city.lowercased()
+        return store.visitedByRelationship
+            .filter { $0.city.lowercased() == lower }
+            .filter { $0.isGoTo || $0.reaction == .loved }
+            .map { memory(from: $0) }
     }
 
     private func alsoGood(in city: String) -> [PlaceMemory] {
-        [tartine]
+        let lower = city.lowercased()
+        let topIds = Set(topPicks(in: city).map(\.id))
+        return store.visitedByRelationship
+            .filter { $0.city.lowercased() == lower }
+            .filter { !topIds.contains($0.id.uuidString) }
+            .map { memory(from: $0) }
     }
 
-    // MARK: Place definitions
+    // MARK: Restaurant → PlaceMemory
 
-    private let juNi = PlaceMemory(
-        id: "ju-ni",
-        name: "Ju-Ni",
-        meta: "Japanese \u{00B7} 23 min \u{00B7} $$",
-        visitCount: "2 visits",
-        rating: "Amazing",
-        dishes: "Omakase, uni toast",
-        summary: "Yes \u{2014} you\u{2019}ve been here 2 times",
-        summarySub: "Last visit 2 weeks ago \u{00B7} both times omakase",
-        heroNote: "One of your strongest San Francisco recommendations.",
-        visits: [
-            VisitRecord(
-                id: "juni-v1",
-                title: "Most recent visit",
-                timeAgo: "2w ago",
-                dishes: [DishRating(id: "juni-v1-d1", name: "Omakase", rating: "Amazing")]
-            ),
-            VisitRecord(
-                id: "juni-v2",
-                title: "Earlier visit",
-                timeAgo: "4m ago",
-                dishes: [
-                    DishRating(id: "juni-v2-d1", name: "Omakase", rating: "Amazing"),
-                    DishRating(id: "juni-v2-d2", name: "Uni toast", rating: "Amazing")
-                ]
-            )
-        ],
-        mostRepeated: "Omakase",
-        confidence: "High \u{2014} one of your best remembered SF places"
-    )
+    private func memory(from r: Restaurant) -> PlaceMemory {
+        let visitText = r.visitCount >= 2 ? "\(r.visitCount) visits" : "1 visit"
+        let rating = ratingText(for: r)
+        let dishNames = r.likedDishes.map(\.name)
+        let dishesText = dishNames.isEmpty ? "" : Array(dishNames.prefix(3)).joined(separator: ", ")
 
-    private let flourWater = PlaceMemory(
-        id: "flour-water",
-        name: "Flour + Water",
-        meta: "Italian \u{00B7} 18 min \u{00B7} $$",
-        visitCount: "1 visit",
-        rating: "Amazing",
-        dishes: "Pappardelle",
-        summary: "Yes \u{2014} you went once",
-        summarySub: "6 weeks ago \u{00B7} pappardelle stood out",
-        heroNote: "Go back for the pappardelle.",
-        visits: [
-            VisitRecord(
-                id: "fw-v1",
-                title: "Only visit",
-                timeAgo: "6w ago",
-                dishes: [
-                    DishRating(id: "fw-v1-d1", name: "Pappardelle", rating: "Amazing"),
-                    DishRating(id: "fw-v1-d2", name: "Meatballs", rating: "Good")
-                ]
-            )
-        ],
-        mostRepeated: "Pappardelle",
-        confidence: "High \u{2014} one standout dish"
-    )
+        var metaParts: [String] = []
+        if r.cuisine != .other { metaParts.append(r.cuisine.rawValue) }
+        if !r.city.isEmpty { metaParts.append(r.city) }
+        if r.visitCount >= 2 { metaParts.append("\(r.visitCount) visits") }
+        let meta = metaParts.joined(separator: " \u{00B7} ")
 
-    private let tartine = PlaceMemory(
-        id: "tartine",
-        name: "Tartine",
-        meta: "Bakery \u{00B7} 12 min \u{00B7} $",
-        visitCount: "1 visit",
-        rating: "Okay",
-        dishes: "Morning bun",
-        summary: "Yes \u{2014} you went once",
-        summarySub: "3 months ago \u{00B7} grabbed a morning bun",
-        heroNote: "Fine for a quick bakery stop, not a destination.",
-        visits: [
-            VisitRecord(
-                id: "tar-v1",
-                title: "Only visit",
-                timeAgo: "3m ago",
-                dishes: [DishRating(id: "tar-v1-d1", name: "Morning bun", rating: "Okay")]
-            )
-        ],
-        mostRepeated: "Morning bun",
-        confidence: "Medium \u{2014} pleasant, not memorable"
-    )
+        let summary: String
+        if r.visitCount >= 2 {
+            summary = "Yes \u{2014} you\u{2019}ve been here \(r.visitCount) times"
+        } else {
+            summary = "Yes \u{2014} you went once"
+        }
+
+        var summarySubParts: [String] = []
+        if !r.relativeVisitDate.isEmpty {
+            summarySubParts.append(r.relativeVisitDate.lowercased())
+        }
+        if let lead = r.leadDish {
+            let verb = r.visitCount >= 2 ? "repeatedly had the \(lead.name)" : "the \(lead.name) stood out"
+            summarySubParts.append(verb)
+        }
+        let summarySub = summarySubParts.joined(separator: " \u{00B7} ")
+
+        let heroNote: String
+        if let cue = r.relationshipCue {
+            if let lead = r.leadDish {
+                heroNote = "\(cue). Go back for the \(lead.name)."
+            } else {
+                heroNote = "\(cue)."
+            }
+        } else if r.city.isEmpty {
+            heroNote = "One of your places."
+        } else {
+            heroNote = "One of your \(r.city) places."
+        }
+
+        let visit = VisitRecord(
+            id: r.id.uuidString + "-v",
+            title: r.visitCount >= 2 ? "Most recent visit" : "Only visit",
+            timeAgo: r.relativeVisitDate,
+            dishes: Array(r.likedDishes.prefix(4)).map { d in
+                DishRating(
+                    id: d.id.uuidString,
+                    name: d.name,
+                    rating: rating.isEmpty ? "Liked" : rating
+                )
+            }
+        )
+
+        return PlaceMemory(
+            id: r.id.uuidString,
+            name: r.name,
+            meta: meta,
+            visitCount: visitText,
+            rating: rating,
+            dishes: dishesText,
+            summary: summary,
+            summarySub: summarySub,
+            heroNote: heroNote,
+            visits: [visit],
+            mostRepeated: r.leadDish?.name ?? "",
+            confidence: confidenceText(for: r)
+        )
+    }
+
+    private func ratingText(for r: Restaurant) -> String {
+        switch r.reaction {
+        case .loved: return "Amazing"
+        case .liked: return "Good"
+        case .meh: return "Okay"
+        case .none: return ""
+        }
+    }
+
+    private func confidenceText(for r: Restaurant) -> String {
+        if r.isGoTo { return "High \u{2014} your go-to" }
+        if r.reaction == .loved && r.visitCount >= 2 { return "High \u{2014} you keep coming back" }
+        if r.reaction == .loved { return "High \u{2014} you loved it" }
+        if r.reaction == .liked && r.visitCount >= 2 { return "Medium \u{2014} still solid" }
+        if r.reaction == .liked { return "Medium \u{2014} you liked it" }
+        return "Low \u{2014} not strongly remembered"
+    }
 }
 
 // =========================================================================
@@ -750,5 +1005,6 @@ private struct MyPlacesPressStyle: ButtonStyle {
 
 #Preview {
     MyPlacesTestView()
+        .environmentObject(RestaurantStore())
         .preferredColorScheme(.dark)
 }

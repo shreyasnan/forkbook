@@ -3,10 +3,9 @@ import FirebaseAuth
 
 // MARK: - Home Test View
 //
-// Decision-surface home page test variant.
-// Hero card: Where should I go? What should I get? Why trust this?
-// Backup section: OTHER STRONG OPTIONS -- trusted alternatives.
-// Does NOT replace NewHomeView.
+// Decision-surface home page: "Where tonight? What to get? Why trust this?"
+// Hero: top-scored place. Backups: other strong picks.
+// Real data: user store + Firestore circle restaurants.
 
 struct HomeTestView: View {
     @EnvironmentObject var store: RestaurantStore
@@ -19,6 +18,12 @@ struct HomeTestView: View {
     @State private var logPrefillName: String = ""
     @State private var logPrefillMeta: String = ""
 
+    // Table data
+    @State private var tableRestaurants: [SharedRestaurant] = []
+    @State private var tableMembers: [FirestoreService.CircleMember] = []
+    @State private var hasLoaded = false
+    private let firestoreService = FirestoreService.shared
+
     // -- Design tokens --
     private static let cardBg = Color(hex: "131517")
     private static let cardHero = Color(hex: "171A1D")
@@ -26,6 +31,8 @@ struct HomeTestView: View {
     private static let mutedGray = Color(hex: "8E8E93")
     private static let dimGray = Color(hex: "6B6B70")
     private static let lightText = Color(hex: "F5F5F7")
+
+    private var currentUid: String? { Auth.auth().currentUser?.uid }
 
     // =========================================================================
     // MARK: - Body
@@ -39,11 +46,21 @@ struct HomeTestView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
 
-                    heroCardView(sampleHeroes[currentHeroIndex])
-                        .padding(.horizontal, 16)
-                        .padding(.top, 18)
+                    let heroes = heroCards
+                    let backups = backupCards
 
-                    if !sampleBackups.isEmpty {
+                    if !heroes.isEmpty {
+                        let idx = min(currentHeroIndex, heroes.count - 1)
+                        heroCardView(heroes[idx])
+                            .padding(.horizontal, 16)
+                            .padding(.top, 18)
+                    } else {
+                        emptyState
+                            .padding(.horizontal, 16)
+                            .padding(.top, 18)
+                    }
+
+                    if !backups.isEmpty {
                         Text("OTHER STRONG OPTIONS")
                             .font(.system(size: 11, weight: .bold))
                             .tracking(1.5)
@@ -53,7 +70,7 @@ struct HomeTestView: View {
                             .padding(.bottom, 12)
 
                         VStack(spacing: 10) {
-                            ForEach(sampleBackups) { backup in
+                            ForEach(backups) { backup in
                                 backupCard(backup)
                             }
                         }
@@ -80,10 +97,15 @@ struct HomeTestView: View {
                     .environmentObject(store)
             }
         }
+        .task {
+            guard !hasLoaded else { return }
+            hasLoaded = true
+            await loadTableData()
+        }
     }
 
     // =========================================================================
-    // MARK: - Header
+    // MARK: - Header + Empty State
     // =========================================================================
 
     private var homeHeader: some View {
@@ -107,6 +129,33 @@ struct HomeTestView: View {
                 )
             }
         }
+    }
+
+    private var emptyState: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Nothing to show yet")
+                .font(.system(size: 16, weight: .bold))
+                .foregroundStyle(Color.fbText)
+            Text("Log a few places you\u{2019}ve been and ForkBook will start surfacing what to get tonight.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+            Button {
+                showAddPlace = true
+            } label: {
+                Text("Add a place")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundStyle(Color.fbText)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Self.warmAccent.opacity(0.18)))
+                    .overlay(Capsule().stroke(Self.warmAccent.opacity(0.35), lineWidth: 1))
+            }
+            .padding(.top, 6)
+            .buttonStyle(HomeCardPressStyle())
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 4)
     }
 
     // =========================================================================
@@ -178,7 +227,19 @@ struct HomeTestView: View {
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Self.warmAccent)
+                .padding(.bottom, hero.changedConfidence == nil ? 22 : 10)
+
+            if let changed = hero.changedConfidence {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(Self.warmAccent)
+                        .frame(width: 6, height: 6)
+                    Text(changed)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                }
                 .padding(.bottom, 22)
+            }
 
             HStack {
                 Spacer()
@@ -241,6 +302,14 @@ struct HomeTestView: View {
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
                 .lineLimit(1)
+
+            if let changed = backup.changedConfidence {
+                Text(changed)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Self.warmAccent.opacity(0.85))
+                    .padding(.top, 3)
+                    .lineLimit(1)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -261,7 +330,8 @@ struct HomeTestView: View {
                 directive: backup.directive,
                 heroDish: extractDish(from: backup.directive),
                 supportingDishes: [],
-                trustLine: backup.trustLine
+                trustLine: backup.trustLine,
+                changedConfidence: backup.changedConfidence
             )
         }
     }
@@ -460,89 +530,353 @@ struct HomeTestView: View {
     }
 
     // =========================================================================
-    // MARK: - Sample Data
+    // MARK: - Data Loading
     // =========================================================================
 
-    private let sampleHeroes: [HeroCardData] = [
-        HeroCardData(
-            eyebrow: "YOUR TABLE\u{2019}S PICK FOR TONIGHT",
-            restaurant: "Ju-Ni",
-            meta: "Japanese \u{00B7} 23 min \u{00B7} $$",
-            directive: "Get the Omakase",
-            heroDish: "Omakase",
-            supportingDishes: ["Uni Toast", "A5 Wagyu"],
-            trustLine: "Priya and Raj both order this"
-        ),
-        HeroCardData(
-            eyebrow: "YOUR TABLE KEEPS ORDERING THIS",
-            restaurant: "Dosa Point",
-            meta: "Indian \u{00B7} 14 min \u{00B7} $",
-            directive: "Go for the Masala Dosa",
-            heroDish: "Masala Dosa",
-            supportingDishes: ["Filter Coffee", "Idli"],
-            trustLine: "3 from your table order this"
-        ),
-        HeroCardData(
-            eyebrow: "SAFE BET TONIGHT",
-            restaurant: "Thai Diner",
-            meta: "Thai \u{00B7} 18 min \u{00B7} $$",
-            directive: "Don\u{2019}t skip the Khao Soi",
-            heroDish: "Khao Soi",
-            supportingDishes: ["Roti", "Thai Tea"],
-            trustLine: "Always solid"
-        ),
-        HeroCardData(
-            eyebrow: "YOUR TABLE\u{2019}S PICK FOR TONIGHT",
-            restaurant: "Flour + Water",
-            meta: "Italian \u{00B7} 18 min \u{00B7} $$",
-            directive: "Order the Pappardelle",
-            heroDish: "Pappardelle",
-            supportingDishes: ["Meatballs", "Caesar"],
-            trustLine: "Maya keeps ordering this"
-        ),
-        HeroCardData(
-            eyebrow: "CLOSE AND WORTH IT",
-            restaurant: "Mensho Tokyo",
-            meta: "Ramen \u{00B7} 11 min \u{00B7} $$",
-            directive: "Have to try the Tori Paitan",
-            heroDish: "Tori Paitan",
-            supportingDishes: ["Gyoza", "Rice Bowl"],
-            trustLine: "Ankit got this last Friday"
-        )
-    ]
+    private func loadTableData() async {
+        let circles = await firestoreService.getMyCircles()
+        guard let circle = circles.first else { return }
+        let members = await firestoreService.getCircleMembers(circle: circle)
+        let restaurants = await firestoreService.getCircleRestaurants(circleId: circle.id)
 
-    private let sampleBackups: [BackupCardData] = [
-        BackupCardData(
-            restaurant: "Flour + Water",
-            meta: "Italian \u{00B7} 18 min \u{00B7} $$",
-            directive: "Get the Pappardelle",
-            trustLine: "Raj and Maya both logged it"
-        ),
-        BackupCardData(
-            restaurant: "Tartine",
-            meta: "Bakery \u{00B7} 12 min \u{00B7} $",
-            directive: "Order the Morning Bun",
-            trustLine: "Priya went recently"
-        ),
-        BackupCardData(
-            restaurant: "Dumpling Home",
-            meta: "Chinese \u{00B7} 9 min \u{00B7} $",
-            directive: "Get the Soup Dumplings",
-            trustLine: "3 from your table logged this"
-        ),
-        BackupCardData(
-            restaurant: "Nopalito",
-            meta: "Mexican \u{00B7} 20 min \u{00B7} $$",
-            directive: "Go for the Carnitas",
-            trustLine: "Ankit keeps ordering this"
-        ),
-        BackupCardData(
-            restaurant: "Sushi Zone",
-            meta: "Japanese \u{00B7} 7 min \u{00B7} $$",
-            directive: "Order the Chirashi",
-            trustLine: "Always solid"
+        let memberMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
+        var enriched = restaurants
+        for i in enriched.indices {
+            enriched[i].userName = memberMap[enriched[i].userId] ?? "Friend"
+        }
+
+        self.tableMembers = members
+        self.tableRestaurants = enriched
+    }
+
+    // =========================================================================
+    // MARK: - Scoring + Candidate Assembly
+    // =========================================================================
+
+    /// Named candidate — a restaurant aggregated across table members + user.
+    private struct ScoredCandidate {
+        let name: String
+        let cuisine: CuisineType
+        let address: String
+        let topDish: String?
+        let supportingDishes: [String]
+        let memberNames: [String]
+        let totalTableVisits: Int
+        let topDishCount: Int
+        let isRepeat: Bool
+        let userHasVisited: Bool
+        let userIsGoTo: Bool
+        let userLoved: Bool
+        let freshestDaysAgo: Int?
+        let recentEntryCount: Int      // entries in last 14d
+        let changedConfidence: String? // why this moved up
+        let score: Int
+    }
+
+    /// Build all candidates, scored and sorted descending.
+    private var rankedCandidates: [ScoredCandidate] {
+        let myRestaurants = store.restaurants
+        let friendEntries = tableRestaurants.filter { $0.userId != currentUid }
+
+        // Group table entries by name (case-insensitive)
+        let byName = Dictionary(grouping: friendEntries, by: { $0.name.lowercased() })
+
+        // Also pick up user-only places (visited, loved/liked, no table match) — solo heroes
+        let myVisited = myRestaurants.filter { $0.category == .visited }
+        let namedFromTable = Set(byName.keys)
+
+        var out: [ScoredCandidate] = []
+
+        // Table-signal candidates
+        for (key, entries) in byName {
+            guard let ref = entries.first else { continue }
+            let myEntry = myRestaurants.first { $0.name.lowercased() == key }
+
+            // Aggregate liked dishes across all table members
+            let allLikedDishes = entries.flatMap { $0.likedDishes }
+            let dishCounts = Dictionary(grouping: allLikedDishes, by: { $0.name })
+                .mapValues { $0.count }
+                .sorted { $0.value > $1.value }
+            let topDish = dishCounts.first?.key
+            let topDishCount = dishCounts.first?.value ?? 0
+            let supporting = dishCounts.dropFirst().prefix(2).map(\.key)
+
+            let names = Array(Set(entries.map {
+                $0.userName.components(separatedBy: " ").first ?? $0.userName
+            })).sorted()
+
+            let totalVisits = entries.reduce(0) { $0 + max(1, $1.visitCount) }
+            let isRepeat = entries.contains { $0.visitCount > 1 }
+
+            // Freshest visit
+            let now = Date()
+            let freshestDays: Int? = entries
+                .compactMap { $0.dateVisited }
+                .map { Calendar.current.dateComponents([.day], from: $0, to: now).day ?? 999 }
+                .min()
+
+            // Recent-window analysis (last 14d)
+            let recentEntries = entries.filter { r in
+                guard let d = r.dateVisited else { return false }
+                let days = Calendar.current.dateComponents([.day], from: d, to: now).day ?? 999
+                return days <= 14
+            }
+            let recentCount = recentEntries.count
+
+            var score = 0
+            score += names.count * 10
+            score += totalVisits * 5
+            score += topDishCount * 8
+            if isRepeat { score += 15 }
+            if myEntry != nil { score += 5 }
+            if myEntry?.reaction == .loved { score += 10 }
+            if myEntry?.isGoTo == true { score += 8 }
+            if let d = freshestDays, d <= 7 { score += 10 }
+            score += recentCount * 4
+
+            // Changed-confidence string — explain what's new
+            let changed: String? = {
+                if recentCount >= 2 && names.count >= 2 {
+                    return "+\(recentCount) logs this week"
+                }
+                if let d = freshestDays, d <= 7, isRepeat {
+                    return "Back here this week"
+                }
+                if let d = freshestDays, d <= 7, names.count == 1 {
+                    return "\(names[0]) just logged this"
+                }
+                if topDishCount >= 3, let dish = topDish {
+                    return "\(dish) endorsed by \(topDishCount)"
+                }
+                if let d = freshestDays, d <= 14, recentCount >= 2 {
+                    return "\(recentCount) fresh logs"
+                }
+                return nil
+            }()
+
+            out.append(ScoredCandidate(
+                name: ref.name,
+                cuisine: ref.cuisine,
+                address: ref.address,
+                topDish: topDish,
+                supportingDishes: Array(supporting),
+                memberNames: names,
+                totalTableVisits: totalVisits,
+                topDishCount: topDishCount,
+                isRepeat: isRepeat,
+                userHasVisited: myEntry != nil,
+                userIsGoTo: myEntry?.isGoTo ?? false,
+                userLoved: myEntry?.reaction == .loved,
+                freshestDaysAgo: freshestDays,
+                recentEntryCount: recentCount,
+                changedConfidence: changed,
+                score: score
+            ))
+        }
+
+        // Solo user candidates (no table signal yet)
+        for r in myVisited {
+            if namedFromTable.contains(r.name.lowercased()) { continue }
+            // Only surface strong solo picks
+            let isStrong = r.isGoTo || r.reaction == .loved ||
+                (r.reaction == .liked && r.visitCount >= 2)
+            guard isStrong else { continue }
+
+            var score = 0
+            if r.isGoTo { score += 25 }
+            if r.reaction == .loved { score += 18 }
+            if r.reaction == .liked { score += 8 }
+            score += min(r.visitCount, 5) * 3
+            if let d = r.dateVisited {
+                let days = Calendar.current.dateComponents([.day], from: d, to: Date()).day ?? 999
+                if days <= 7 { score += 6 }
+            }
+
+            let topDish = r.leadDish?.name
+            let supporting = Array(r.likedDishes.dropFirst().prefix(2).map(\.name))
+
+            let freshDays = r.dateVisited.map {
+                Calendar.current.dateComponents([.day], from: $0, to: Date()).day ?? 999
+            }
+            let soloChanged: String? = {
+                if let d = freshDays, d <= 7 {
+                    if r.isGoTo { return "Your go-to, logged this week" }
+                    if r.reaction == .loved { return "You loved this recently" }
+                    if r.visitCount >= 2 { return "You came back this week" }
+                    return "Fresh in your log"
+                }
+                return nil
+            }()
+
+            out.append(ScoredCandidate(
+                name: r.name,
+                cuisine: r.cuisine,
+                address: r.address,
+                topDish: topDish,
+                supportingDishes: supporting,
+                memberNames: [],
+                totalTableVisits: 0,
+                topDishCount: 0,
+                isRepeat: r.visitCount >= 2,
+                userHasVisited: true,
+                userIsGoTo: r.isGoTo,
+                userLoved: r.reaction == .loved,
+                freshestDaysAgo: freshDays,
+                recentEntryCount: 0,
+                changedConfidence: soloChanged,
+                score: score
+            ))
+        }
+
+        return out.sorted { $0.score > $1.score }
+    }
+
+    /// Top 1 (or 2) as heroes, rest as backups.
+    private var heroCards: [HeroCardData] {
+        let candidates = rankedCandidates
+        guard !candidates.isEmpty else { return [] }
+        return Array(candidates.prefix(1)).map { buildHero(from: $0) }
+    }
+
+    private var backupCards: [BackupCardData] {
+        let candidates = rankedCandidates
+        guard candidates.count > 1 else { return [] }
+        return Array(candidates.dropFirst().prefix(5)).map { buildBackup(from: $0) }
+    }
+
+    // MARK: Candidate → Card
+
+    private func buildHero(from c: ScoredCandidate) -> HeroCardData {
+        let metaParts: [String] = {
+            var p: [String] = []
+            if c.cuisine != .other { p.append(c.cuisine.rawValue) }
+            let city = cityString(from: c.address)
+            if !city.isEmpty { p.append(city) }
+            return p
+        }()
+        let meta = metaParts.joined(separator: " \u{00B7} ")
+
+        let dishDominance = c.topDishCount >= max(2, c.memberNames.count)
+        let recent = (c.freshestDaysAgo ?? Int.max) <= 7
+        let tier = Self.selectDirectiveTier(
+            trustedCount: c.memberNames.count,
+            repeatBehavior: c.isRepeat,
+            dishDominance: dishDominance,
+            recentSignal: recent
         )
-    ]
+        let dish = c.topDish ?? "what they get"
+        let directive = c.topDish != nil
+            ? Self.buildDirective(tier: tier, dish: dish)
+            : (c.userLoved ? "You loved it here" : "Solid pick")
+
+        let eyebrow: String = {
+            if c.memberNames.count >= 3 {
+                return "YOUR TABLE\u{2019}S PICK FOR TONIGHT"
+            }
+            if c.isRepeat && c.memberNames.count >= 1 {
+                return "YOUR TABLE KEEPS ORDERING THIS"
+            }
+            if c.userIsGoTo { return "YOUR GO-TO" }
+            if c.userLoved && c.memberNames.isEmpty { return "YOU LOVED THIS PLACE" }
+            if recent { return "FRESH FROM YOUR TABLE" }
+            return "STRONG PICK"
+        }()
+
+        let trustLine = buildTrustLine(
+            names: c.memberNames,
+            visits: c.totalTableVisits,
+            userSignal: userSignalText(c)
+        )
+
+        return HeroCardData(
+            eyebrow: eyebrow,
+            restaurant: c.name,
+            meta: meta,
+            directive: directive,
+            heroDish: dish,
+            supportingDishes: c.supportingDishes,
+            trustLine: trustLine,
+            changedConfidence: c.changedConfidence
+        )
+    }
+
+    private func buildBackup(from c: ScoredCandidate) -> BackupCardData {
+        let metaParts: [String] = {
+            var p: [String] = []
+            if c.cuisine != .other { p.append(c.cuisine.rawValue) }
+            let city = cityString(from: c.address)
+            if !city.isEmpty { p.append(city) }
+            return p
+        }()
+        let meta = metaParts.joined(separator: " \u{00B7} ")
+
+        let dishDominance = c.topDishCount >= max(2, c.memberNames.count)
+        let recent = (c.freshestDaysAgo ?? Int.max) <= 7
+        let tier = Self.selectDirectiveTier(
+            trustedCount: c.memberNames.count,
+            repeatBehavior: c.isRepeat,
+            dishDominance: dishDominance,
+            recentSignal: recent
+        )
+        let directive: String = {
+            if let d = c.topDish { return Self.buildDirective(tier: tier, dish: d) }
+            if c.userIsGoTo { return "Your go-to" }
+            if c.userLoved { return "You loved it" }
+            return "Worth it"
+        }()
+        let trustLine = buildTrustLine(
+            names: c.memberNames,
+            visits: c.totalTableVisits,
+            userSignal: userSignalText(c)
+        )
+
+        return BackupCardData(
+            restaurant: c.name,
+            meta: meta,
+            directive: directive,
+            trustLine: trustLine,
+            changedConfidence: c.changedConfidence
+        )
+    }
+
+    private func userSignalText(_ c: ScoredCandidate) -> String? {
+        if c.userIsGoTo { return "Your go-to" }
+        if c.userLoved { return "You loved it" }
+        if c.userHasVisited { return "You've been" }
+        return nil
+    }
+
+    private func buildTrustLine(names: [String], visits: Int, userSignal: String?) -> String {
+        // Prefer cross-table signal when present
+        if visits >= 3 {
+            return "\(visits) visits from your table"
+        }
+        if names.count >= 3 {
+            return "\(names[0]), \(names[1]) & \(names.count - 2) more"
+        }
+        if names.count == 2 {
+            return "\(names[0]) & \(names[1]) both order this"
+        }
+        if let name = names.first {
+            return "\(name) from your table"
+        }
+        // Fall back to user signal
+        if let u = userSignal { return u }
+        return "Worth exploring"
+    }
+
+    private func cityString(from address: String) -> String {
+        let parts = address
+            .components(separatedBy: ",")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        guard parts.count >= 2 else { return parts.first ?? "" }
+        // "Street, City, State Zip[, Country]" → City
+        if parts.count >= 3, let first = parts.first, first.first?.isNumber == true {
+            return parts[1]
+        }
+        return parts.first ?? ""
+    }
 }
 
 // =========================================================================
@@ -558,6 +892,7 @@ struct HeroCardData: Identifiable {
     let heroDish: String
     let supportingDishes: [String]
     let trustLine: String
+    let changedConfidence: String?
 }
 
 struct BackupCardData: Identifiable {
@@ -566,6 +901,7 @@ struct BackupCardData: Identifiable {
     let meta: String
     let directive: String
     let trustLine: String
+    let changedConfidence: String?
 }
 
 // =========================================================================
