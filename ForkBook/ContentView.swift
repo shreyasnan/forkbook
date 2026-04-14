@@ -1,14 +1,17 @@
 import SwiftUI
+import FirebaseAuth
 
 struct ContentView: View {
+    @EnvironmentObject var store: RestaurantStore
+    @State private var showOnboarding = false
+    @State private var hasCheckedOnboarding = false
+
     init() {
         // Instagram-style dark tab bar
         let tabBarAppearance = UITabBarAppearance()
         tabBarAppearance.configureWithOpaqueBackground()
-        tabBarAppearance.backgroundColor = UIColor(Color.igBlack)
-
-        // Divider line at top of tab bar
-        tabBarAppearance.shadowColor = UIColor(Color.igDivider)
+        tabBarAppearance.backgroundColor = UIColor(Color.fbBg)
+        tabBarAppearance.shadowColor = UIColor(Color.fbBorder)
 
         UITabBar.appearance().standardAppearance = tabBarAppearance
         UITabBar.appearance().scrollEdgeAppearance = tabBarAppearance
@@ -16,10 +19,10 @@ struct ContentView: View {
         // Instagram-style dark navigation bar
         let navAppearance = UINavigationBarAppearance()
         navAppearance.configureWithOpaqueBackground()
-        navAppearance.backgroundColor = UIColor(Color.igBlack)
-        navAppearance.titleTextAttributes = [.foregroundColor: UIColor(Color.igTextPrimary)]
-        navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(Color.igTextPrimary)]
-        navAppearance.shadowColor = UIColor(Color.igDivider)
+        navAppearance.backgroundColor = UIColor(Color.fbBg)
+        navAppearance.titleTextAttributes = [.foregroundColor: UIColor(Color.fbText)]
+        navAppearance.largeTitleTextAttributes = [.foregroundColor: UIColor(Color.fbText)]
+        navAppearance.shadowColor = UIColor(Color.fbBorder)
 
         UINavigationBar.appearance().standardAppearance = navAppearance
         UINavigationBar.appearance().scrollEdgeAppearance = navAppearance
@@ -28,17 +31,53 @@ struct ContentView: View {
 
     var body: some View {
         TabView {
-            VisitedListView()
+            HomeTestView()
                 .tabItem {
-                    Label("My Restaurants", systemImage: "fork.knife")
+                    Label("Home", systemImage: "house")
                 }
 
-            WishlistView()
+            SearchTestView()
                 .tabItem {
-                    Label("Wishlist", systemImage: "star.bubble")
+                    Label("Search", systemImage: "magnifyingglass")
+                }
+
+            MyPlacesTestView()
+                .tabItem {
+                    Label("My Places", systemImage: "bookmark")
+                }
+
+            TableTestView()
+                .tabItem {
+                    Label("Table", systemImage: "person.2")
                 }
         }
-        .tint(Color.igTextPrimary)
+        .tint(Color.fbText)
+        .fullScreenCover(isPresented: $showOnboarding) {
+            InviteOnboardingView(
+                onComplete: {
+                    showOnboarding = false
+                    Task {
+                        try? await FirestoreService.shared.saveTastePreferences(
+                            TastePreferences(onboardingCompleted: true)
+                        )
+                    }
+                }
+            )
+        }
+        .task {
+            guard !hasCheckedOnboarding else { return }
+            hasCheckedOnboarding = true
+
+            // Sync Firestore entries into local store (one-time import)
+            await store.importFromFirestore()
+
+            // DEBUG: Always show onboarding (revert before shipping)
+            showOnboarding = true
+            // let prefs = await FirestoreService.shared.getTastePreferences()
+            // if !prefs.onboardingCompleted {
+            //     showOnboarding = true
+            // }
+        }
     }
 }
 
