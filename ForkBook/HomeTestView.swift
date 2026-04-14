@@ -10,6 +10,7 @@ import FirebaseAuth
 struct HomeTestView: View {
     @EnvironmentObject var store: RestaurantStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
 
     @State private var selectedHero: HeroCardData? = nil
     @State private var showAddPlace = false
@@ -245,7 +246,7 @@ struct HomeTestView: View {
                 Spacer()
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    selectedHero = hero
+                    openInMaps(for: hero)
                 } label: {
                     Text("Go here \u{2192}")
                         .font(.system(size: 14, weight: .bold))
@@ -328,11 +329,33 @@ struct HomeTestView: View {
                 restaurant: backup.restaurant,
                 meta: backup.meta,
                 directive: backup.directive,
-                heroDish: extractDish(from: backup.directive),
-                supportingDishes: [],
+                heroDish: backup.heroDish,
+                supportingDishes: backup.supportingDishes,
                 trustLine: backup.trustLine,
                 changedConfidence: backup.changedConfidence
             )
+        }
+    }
+
+    /// Open the hero's restaurant in Apple Maps.
+    /// Uses a search query of "name city" so Maps finds the right place,
+    /// falling back to just name if city can't be derived from meta.
+    private func openInMaps(for hero: HeroCardData) {
+        // Meta is formatted like "Cuisine · City" — take the last segment if it
+        // isn't the cuisine. Safe fallback is just the restaurant name.
+        let parts = hero.meta
+            .components(separatedBy: "\u{00B7}")
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+        let cityGuess = parts.count >= 2 ? parts.last : nil
+        let query = [hero.restaurant, cityGuess]
+            .compactMap { $0 }
+            .joined(separator: " ")
+        let encoded = query.addingPercentEncoding(
+            withAllowedCharacters: .urlQueryAllowed
+        ) ?? hero.restaurant
+        if let url = URL(string: "maps://?q=\(encoded)") {
+            openURL(url)
         }
     }
 
@@ -395,7 +418,19 @@ struct HomeTestView: View {
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Self.warmAccent.opacity(0.8))
                         .padding(.top, 18)
+                        .padding(.bottom, hero.changedConfidence == nil ? 36 : 10)
+
+                    if let changed = hero.changedConfidence {
+                        HStack(spacing: 6) {
+                            Circle()
+                                .fill(Self.warmAccent)
+                                .frame(width: 5, height: 5)
+                            Text(changed)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Color(hex: "B0B0B4"))
+                        }
                         .padding(.bottom, 36)
+                    }
 
                     detailCTAs(hero: hero)
                 }
@@ -419,6 +454,7 @@ struct HomeTestView: View {
         VStack(spacing: 10) {
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                openInMaps(for: hero)
                 selectedHero = nil
             } label: {
                 Text("Go here")
@@ -834,6 +870,8 @@ struct HomeTestView: View {
             restaurant: c.name,
             meta: meta,
             directive: directive,
+            heroDish: c.topDish ?? extractDish(from: directive),
+            supportingDishes: c.supportingDishes,
             trustLine: trustLine,
             changedConfidence: c.changedConfidence
         )
@@ -900,6 +938,8 @@ struct BackupCardData: Identifiable {
     let restaurant: String
     let meta: String
     let directive: String
+    let heroDish: String
+    let supportingDishes: [String]
     let trustLine: String
     let changedConfidence: String?
 }
