@@ -291,20 +291,40 @@ struct MyPlacesTestView: View {
 
                 headerBlock(title: name, subtitle: "Your recommendations")
 
+                let stats = cityStats(in: name)
                 let top = topPicks(in: name)
                 let also = alsoGood(in: name)
+                let cuisines = topCuisines(in: name)
+                let repeated = mostRepeatedDishes(in: name)
 
-                if top.isEmpty && also.isEmpty {
+                if stats.total == 0 {
                     Text("No places in \(name) yet.")
                         .font(.system(size: 14, weight: .medium))
                         .foregroundStyle(Color(hex: "B0B0B4"))
                         .padding(.horizontal, 22)
                         .padding(.top, 20)
+                } else {
+                    cityStatsStrip(stats)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 14)
+
+                    if !cuisines.isEmpty {
+                        cityCuisineChips(cuisines)
+                            .padding(.top, 14)
+                    }
+
+                    if !repeated.isEmpty {
+                        sectionLabel("YOU KEEP ORDERING")
+                            .padding(.top, 22)
+
+                        cityRepeatedDishesStrip(repeated)
+                            .padding(.top, 4)
+                    }
                 }
 
                 if !top.isEmpty {
                     sectionLabel("TOP PICKS")
-                        .padding(.top, 10)
+                        .padding(.top, 22)
 
                     VStack(spacing: 10) {
                         ForEach(top) { place in
@@ -329,6 +349,159 @@ struct MyPlacesTestView: View {
                 Spacer(minLength: 80)
             }
         }
+    }
+
+    // MARK: City stats + breakdown
+
+    private struct CityStats {
+        let total: Int
+        let loved: Int
+        let goTo: Int
+        let visits: Int
+    }
+
+    private func cityStats(in city: String) -> CityStats {
+        let lower = city.lowercased()
+        let here = store.visitedByRelationship.filter { $0.city.lowercased() == lower }
+        let loved = here.filter { $0.reaction == .loved }.count
+        let goTo = here.filter { $0.isGoTo }.count
+        let visits = here.reduce(0) { $0 + max($1.visitCount, 1) }
+        return CityStats(total: here.count, loved: loved, goTo: goTo, visits: visits)
+    }
+
+    private func topCuisines(in city: String) -> [(name: String, count: Int)] {
+        let lower = city.lowercased()
+        let here = store.visitedByRelationship.filter { $0.city.lowercased() == lower }
+        var counts: [String: Int] = [:]
+        for r in here where r.cuisine != .other {
+            counts[r.cuisine.rawValue, default: 0] += 1
+        }
+        return counts
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return lhs.key < rhs.key
+            }
+            .prefix(4)
+            .map { (name: $0.key, count: $0.value) }
+    }
+
+    private func mostRepeatedDishes(in city: String) -> [(name: String, count: Int)] {
+        let lower = city.lowercased()
+        let here = store.visitedByRelationship.filter { $0.city.lowercased() == lower }
+        var counts: [String: Int] = [:]
+        for r in here {
+            for d in r.likedDishes {
+                let key = d.name.trimmingCharacters(in: .whitespaces)
+                guard !key.isEmpty else { continue }
+                counts[key, default: 0] += 1
+            }
+        }
+        return counts
+            .filter { $0.value >= 2 }
+            .sorted { lhs, rhs in
+                if lhs.value != rhs.value { return lhs.value > rhs.value }
+                return lhs.key < rhs.key
+            }
+            .prefix(4)
+            .map { (name: $0.key, count: $0.value) }
+    }
+
+    private func cityStatsStrip(_ stats: CityStats) -> some View {
+        HStack(spacing: 10) {
+            cityStatPill(label: "Places", value: "\(stats.total)")
+            if stats.goTo > 0 {
+                cityStatPill(label: "Go-to", value: "\(stats.goTo)", warm: true)
+            }
+            if stats.loved > 0 {
+                cityStatPill(label: "Loved", value: "\(stats.loved)", warm: true)
+            }
+            if stats.visits > stats.total {
+                cityStatPill(label: "Visits", value: "\(stats.visits)")
+            }
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func cityStatPill(label: String, value: String, warm: Bool = false) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(value)
+                .font(.system(size: 18, weight: .heavy))
+                .foregroundStyle(warm ? Color.fbWarm : Color.fbText)
+            Text(label)
+                .font(.system(size: 10, weight: .bold))
+                .tracking(0.5)
+                .foregroundStyle(Color(hex: "8E8E93"))
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
+        .frame(minWidth: 64, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(warm ? Color.fbWarm.opacity(0.07) : Color.white.opacity(0.03))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(
+                    warm ? Color.fbWarm.opacity(0.18) : Color.white.opacity(0.06),
+                    lineWidth: 1
+                )
+        )
+    }
+
+    private func cityCuisineChips(_ cuisines: [(name: String, count: Int)]) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(Array(cuisines.enumerated()), id: \.offset) { _, c in
+                    HStack(spacing: 6) {
+                        Text(c.name)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundStyle(Color.fbText)
+                        Text("\(c.count)")
+                            .font(.system(size: 11, weight: .heavy))
+                            .foregroundStyle(Color.fbWarm)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(
+                        Capsule().fill(Color.white.opacity(0.03))
+                    )
+                    .overlay(
+                        Capsule().stroke(Color.white.opacity(0.06), lineWidth: 1)
+                    )
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func cityRepeatedDishesStrip(_ dishes: [(name: String, count: Int)]) -> some View {
+        VStack(spacing: 8) {
+            ForEach(Array(dishes.enumerated()), id: \.offset) { _, d in
+                HStack(spacing: 10) {
+                    Circle()
+                        .fill(Color.fbWarm.opacity(0.9))
+                        .frame(width: 6, height: 6)
+                    Text(d.name)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.fbText)
+                    Spacer(minLength: 8)
+                    Text("\(d.count)\u{00D7}")
+                        .font(.system(size: 12, weight: .heavy))
+                        .foregroundStyle(Color.fbWarm)
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.03))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
+            }
+        }
+        .padding(.horizontal, 16)
     }
 
     // =========================================================================
