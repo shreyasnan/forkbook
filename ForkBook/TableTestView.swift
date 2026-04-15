@@ -225,16 +225,28 @@ struct TableTestView: View {
 
     private func loadTable() async {
         let circles = await firestoreService.getMyCircles()
-        guard let circle = circles.first else { return }
-        let members = await firestoreService.getCircleMembers(circle: circle)
-        let restaurants = await firestoreService.getCircleRestaurants(circleId: circle.id)
-        let memberMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
-        var enriched = restaurants
-        for i in enriched.indices {
-            enriched[i].userName = memberMap[enriched[i].userId] ?? "Friend"
+        guard let circle = circles.first else {
+            // No circle yet — seed with mock data so the tab isn't empty.
+            self.tableMembers = MockTableData.buildMembers()
+            self.tableRestaurants = MockTableData.buildSharedRestaurants()
+            return
         }
-        self.tableMembers = members
-        self.tableRestaurants = enriched
+        let members = await firestoreService.getCircleMembers(circle: circle)
+        var restaurants = await firestoreService.getCircleRestaurants(circleId: circle.id)
+        let memberMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
+        for i in restaurants.indices {
+            restaurants[i].userName = memberMap[restaurants[i].userId] ?? "Friend"
+        }
+
+        // Mock data fallback when the user's circle is empty.
+        let realFriends = restaurants.filter { $0.userId != currentUid }
+        if realFriends.isEmpty {
+            self.tableMembers = members + MockTableData.buildMembers()
+            self.tableRestaurants = restaurants + MockTableData.buildSharedRestaurants()
+        } else {
+            self.tableMembers = members
+            self.tableRestaurants = restaurants
+        }
     }
 
     // =========================================================================

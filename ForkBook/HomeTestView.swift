@@ -116,33 +116,20 @@ struct HomeTestView: View {
     // =========================================================================
 
     private var homeHeader: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("Home")
-                        .font(.system(size: 26, weight: .heavy))
-                        .tracking(-0.5)
-                        .foregroundColor(Color.fbText)
-                    Text("Recommendations from your table")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(Self.mutedGray)
-                }
-                Spacer()
-                Button { showProfile = true } label: {
-                    RingedAvatarView(
-                        name: Auth.auth().currentUser?.displayName ?? "User",
-                        size: 32,
-                        photoData: ProfilePhotoStore.shared.load(),
-                        showRing: true
-                    )
-                }
+        HStack(alignment: .top) {
+            Text("Tonight")
+                .font(.system(size: 26, weight: .heavy))
+                .tracking(-0.5)
+                .foregroundColor(Color.fbText)
+            Spacer()
+            Button { showProfile = true } label: {
+                RingedAvatarView(
+                    name: Auth.auth().currentUser?.displayName ?? "User",
+                    size: 32,
+                    photoData: ProfilePhotoStore.shared.load(),
+                    showRing: true
+                )
             }
-
-            Text("Based on real visits, saved places, and what people actually ordered.")
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
-                .fixedSize(horizontal: false, vertical: true)
-                .padding(.top, 2)
         }
     }
 
@@ -349,7 +336,7 @@ struct HomeTestView: View {
                 Spacer()
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    openInMaps(for: hero)
+                    selectedHero = hero
                 } label: {
                     Text("Go here \u{2192}")
                         .font(.system(size: 14, weight: .bold))
@@ -895,7 +882,7 @@ struct HomeTestView: View {
             }
             let soloChanged: String? = {
                 if let d = freshDays, d <= 7 {
-                    if r.isGoTo { return "Your go-to, logged this week" }
+                    if r.isGoTo { return "You keep coming back, logged this week" }
                     if r.reaction == .loved { return "You loved this recently" }
                     if r.visitCount >= 2 { return "You came back this week" }
                     return "Fresh in your log"
@@ -1006,7 +993,7 @@ struct HomeTestView: View {
             if c.isRepeat && c.memberNames.count >= 1 {
                 return "YOUR TABLE KEEPS ORDERING THIS"
             }
-            if c.userIsGoTo { return "YOUR GO-TO" }
+            if c.userIsGoTo { return "YOU ALWAYS GO BACK" }
             if c.userLoved && c.memberNames.isEmpty { return "YOU LOVED THIS PLACE" }
             if recent { return "FRESH FROM YOUR TABLE" }
             return "STRONG PICK"
@@ -1072,7 +1059,7 @@ struct HomeTestView: View {
         )
         let directive: String = {
             if let d = c.topDish { return Self.buildDirective(tier: tier, dish: d) }
-            if c.userIsGoTo { return "Your go-to" }
+            if c.userIsGoTo { return "You always go back" }
             if c.userLoved { return "You loved it" }
             return "Worth it"
         }()
@@ -1095,9 +1082,9 @@ struct HomeTestView: View {
     }
 
     private func userSignalText(_ c: ScoredCandidate) -> String? {
-        if c.userIsGoTo { return "Your go-to" }
+        if c.userIsGoTo { return "You always go back" }
         if c.userLoved { return "You loved it" }
-        if c.userHasVisited { return "You've been" }
+        if c.userHasVisited { return "You\u{2019}ve been" }
         return nil
     }
 

@@ -1131,7 +1131,7 @@ struct SearchTestView: View {
             // Surface this as a memory-style detail sheet so the user
             // doesn't lose context about what they remember.
             let trustLine: String = {
-                if let r = hit.mine, r.isGoTo { return "Your go-to" }
+                if let r = hit.mine, r.isGoTo { return "You always go back" }
                 if let r = hit.mine, r.reaction == .loved { return "You loved it" }
                 if let r = hit.mine { return "\(r.visitCount) visit\(r.visitCount == 1 ? "" : "s")" }
                 return "From your places"
@@ -1163,7 +1163,7 @@ struct SearchTestView: View {
                         .foregroundStyle(Self.lightText)
                     Spacer()
                     if let r = hit.mine, r.isGoTo {
-                        mineBadge("Go-to")
+                        mineBadge("Repeat")
                     } else if let r = hit.mine, r.reaction == .loved {
                         mineBadge("Loved")
                     } else if let r = hit.mine, r.visitCount >= 2 {
