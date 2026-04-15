@@ -100,8 +100,12 @@ enum LocalSearchIndex {
         }
 
         // Index the user's own places by normalized name for fast join.
+        // Multiple restaurants can normalize to the same key (e.g. "Palo Alto Sol"
+        // and "Palo Alto Sol Restaurant"), so we dedupe by keeping the one with the
+        // stronger relationship (lower myTier).
         let mineByKey: [String: Restaurant] = Dictionary(
-            uniqueKeysWithValues: myRestaurants.map { (normalizeName($0.name), $0) }
+            myRestaurants.map { (normalizeName($0.name), $0) },
+            uniquingKeysWith: { a, b in Self.myTier(a) <= Self.myTier(b) ? a : b }
         )
 
         // Build the set of unique place keys we'll score.
@@ -280,15 +284,7 @@ enum LocalSearchIndex {
         }()
 
         // Mine-tier (drives tie-breaks; lower = stronger relationship)
-        let myTier: Int = {
-            guard let r = mine else { return 5 }
-            if r.isGoTo { return 0 }
-            if r.reaction == .loved && r.visitCount >= 2 { return 1 }
-            if r.reaction == .loved { return 2 }
-            if r.reaction == .liked && r.visitCount >= 2 { return 3 }
-            if r.reaction == .liked { return 4 }
-            return 5
-        }()
+        let myTier: Int = mine.map(Self.myTier) ?? 5
 
         // Small relationship boost so a loved-mine outranks a similarly-scored
         // unknown — without overpowering a strong text match.
@@ -332,6 +328,19 @@ enum LocalSearchIndex {
             tableEntries: tableEntries,
             provenance: provenance
         )
+    }
+
+    // MARK: Relationship tier
+
+    /// Relationship-strength tier for a user's restaurant (lower = stronger).
+    /// Shared between the dedup logic and per-hit scoring.
+    static func myTier(_ r: Restaurant) -> Int {
+        if r.isGoTo { return 0 }
+        if r.reaction == .loved && r.visitCount >= 2 { return 1 }
+        if r.reaction == .loved { return 2 }
+        if r.reaction == .liked && r.visitCount >= 2 { return 3 }
+        if r.reaction == .liked { return 4 }
+        return 5
     }
 
     // MARK: Tokenization
