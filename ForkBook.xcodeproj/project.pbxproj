@@ -33,6 +33,7 @@
 		C0219F642F89F76900CAC08D /* HomeStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F632F89F76900CAC08D /* HomeStateMachine.swift */; };
 		C0219F662F8A0C2800CAC08D /* MenuDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F652F8A0C2800CAC08D /* MenuDataService.swift */; };
 		C0219F682F8E088D00CAC08D /* AddPlaceFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F672F8E088D00CAC08D /* AddPlaceFlow.swift */; };
+		C0219F6A2F8F58DE00CAC08D /* OccasionClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */; };
 		C061DCB62F7A4AC400DF79BD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB52F7A4AC400DF79BD /* FirebaseAuth */; };
 		C061DCB82F7A4AC400DF79BD /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB72F7A4AC400DF79BD /* FirebaseCore */; };
 		C061DCBA2F7A4AC400DF79BD /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB92F7A4AC400DF79BD /* FirebaseFirestore */; };
@@ -51,6 +52,7 @@
 		C0C13E752F7E461F00A5DEFC /* TasteOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E742F7E461F00A5DEFC /* TasteOnboardingView.swift */; };
 		C0C13E772F7E4D4E00A5DEFC /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = C0C13E762F7E4D4E00A5DEFC /* FirebaseFunctions */; };
 		C0C13E792F7EC84400A5DEFC /* AskForkBookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */; };
+		C0C13E812F7EC84500A5DEFC /* LocalSearchIndex.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E802F7EC84500A5DEFC /* LocalSearchIndex.swift */; };
 		C0F0402E2F84B3AF00958ED9 /* MockTableData.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F0402D2F84B3AF00958ED9 /* MockTableData.swift */; };
 		C0F040302F84BE7300958ED9 /* DebugClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F0402F2F84BE7300958ED9 /* DebugClock.swift */; };
 		D0AVATAR2F80000000000001 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AVATAR2F80000000000002 /* AvatarView.swift */; };
@@ -85,6 +87,7 @@
 		C0219F632F89F76900CAC08D /* HomeStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeStateMachine.swift; sourceTree = "<group>"; };
 		C0219F652F8A0C2800CAC08D /* MenuDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuDataService.swift; sourceTree = "<group>"; };
 		C0219F672F8E088D00CAC08D /* AddPlaceFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPlaceFlow.swift; sourceTree = "<group>"; };
+		C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OccasionClassifier.swift; sourceTree = "<group>"; };
 		C07B977F2F7A4FD5009FA238 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		C07B97802F7A4FD5009FA238 /* FirebaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseConfig.swift; sourceTree = "<group>"; };
 		C07B97812F7A4FD5009FA238 /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
@@ -102,6 +105,7 @@
 		C0C13E722F7CED8300A5DEFC /* QuickLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLogView.swift; sourceTree = "<group>"; };
 		C0C13E742F7E461F00A5DEFC /* TasteOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteOnboardingView.swift; sourceTree = "<group>"; };
 		C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskForkBookService.swift; sourceTree = "<group>"; };
+		C0C13E802F7EC84500A5DEFC /* LocalSearchIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSearchIndex.swift; sourceTree = "<group>"; };
 		C0F0402D2F84B3AF00958ED9 /* MockTableData.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MockTableData.swift; sourceTree = "<group>"; };
 		C0F0402F2F84BE7300958ED9 /* DebugClock.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DebugClock.swift; sourceTree = "<group>"; };
 		C10001 /* ForkBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ForkBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -143,6 +147,7 @@
 		E10002 /* ForkBook */ = {
 			isa = PBXGroup;
 			children = (
+				C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */,
 				C0219F672F8E088D00CAC08D /* AddPlaceFlow.swift */,
 				C0219F652F8A0C2800CAC08D /* MenuDataService.swift */,
 				C0219F632F89F76900CAC08D /* HomeStateMachine.swift */,
@@ -160,6 +165,7 @@
 				A20099002FA000000000000A /* SearchTestView.swift */,
 				A20099002FA000000000000C /* TableTestView.swift */,
 				C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */,
+				C0C13E802F7EC84500A5DEFC /* LocalSearchIndex.swift */,
 				D0AVATAR2F80000000000002 /* AvatarView.swift */,
 				D0LOCMGR2F80000000000002 /* LocationManager.swift */,
 				C0C13E742F7E461F00A5DEFC /* TasteOnboardingView.swift */,
@@ -305,6 +311,7 @@
 				C0C13E732F7CED8300A5DEFC /* QuickLogView.swift in Sources */,
 				C07B97872F7A4FD5009FA238 /* MyCircleView.swift in Sources */,
 				C07B97882F7A4FD5009FA238 /* FirestoreService.swift in Sources */,
+				C0219F6A2F8F58DE00CAC08D /* OccasionClassifier.swift in Sources */,
 				A10013 /* CuisineDetector.swift in Sources */,
 				C0F040302F84BE7300958ED9 /* DebugClock.swift in Sources */,
 				C0219F682F8E088D00CAC08D /* AddPlaceFlow.swift in Sources */,
@@ -314,6 +321,7 @@
 				D0AVATAR2F80000000000001 /* AvatarView.swift in Sources */,
 				D0LOCMGR2F80000000000001 /* LocationManager.swift in Sources */,
 				C0C13E792F7EC84400A5DEFC /* AskForkBookService.swift in Sources */,
+				C0C13E812F7EC84500A5DEFC /* LocalSearchIndex.swift in Sources */,
 				A10016 /* PopularDishes.swift in Sources */,
 				A10017 /* LaunchScreenView.swift in Sources */,
 				A10018 /* RestaurantDishDB.swift in Sources */,
