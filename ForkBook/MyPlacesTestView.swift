@@ -12,9 +12,27 @@ import FirebaseAuth
 
 struct MyPlacesTestView: View {
     @EnvironmentObject var store: RestaurantStore
+    @ObservedObject private var askService = AskForkBookService.shared
+    @ObservedObject private var firestoreService = FirestoreService.shared
+
     @State private var route: Route = .home
     @State private var query: String = ""
     @FocusState private var searchFocused: Bool
+
+    // Table-side data — loaded from Firestore on appear so we can rank the
+    // user's circle's places alongside their own in local search.
+    @State private var tableRestaurants: [SharedRestaurant] = []
+    @State private var tableMembers: [FirestoreService.CircleMember] = []
+
+    // Ask state — when the user runs an Ask escalation, we hold onto the
+    // query that was asked so we know whether to render the answer card.
+    @State private var lastAskedQuery: String? = nil
+
+    // For table-only hits, present the SearchTestView-style detail sheet
+    // rather than a new MyPlaces route (the user has no memory page for them).
+    @State private var selectedTableHit: LocalSearchHit? = nil
+
+    private var currentUid: String? { Auth.auth().currentUser?.uid }
 
     // MARK: Routes
 
@@ -47,6 +65,35 @@ struct MyPlacesTestView: View {
                 }
             }
         }
+        .task { await loadTableData() }
+        .sheet(item: $selectedTableHit) { hit in
+            tableHitSheet(hit)
+        }
+    }
+
+    // =========================================================================
+    // MARK: - Table Data Loading
+    // =========================================================================
+
+    private func loadTableData() async {
+        let circles = await firestoreService.getMyCircles()
+        guard let circle = circles.first else { return }
+
+        tableMembers = await firestoreService.getCircleMembers(circle: circle)
+        var fetched = await firestoreService.getCircleRestaurants(circleId: circle.id)
+
+        let memberMap = Dictionary(uniqueKeysWithValues: tableMembers.map { ($0.uid, $0.displayName) })
+        for i in fetched.indices {
+            fetched[i].userName = memberMap[fetched[i].userId] ?? "Friend"
+        }
+
+        // Mock data fallback when the user's circle is empty (matches SearchTestView).
+        let realEntries = fetched.filter { $0.userId != currentUid }
+        if realEntries.isEmpty {
+            fetched.append(contentsOf: MockTableData.buildSharedRestaurants())
+        }
+
+        tableRestaurants = fetched
     }
 
     // =========================================================================
@@ -111,13 +158,20 @@ struct MyPlacesTestView: View {
         }
     }
 
-    // Helper text under search — teaches the smart-query syntax without
-    // resurrecting a separate "you might ask" surface.
+    // Helper text under search — teaches what's searchable without
+    // resurrecting a separate "you might ask" surface. Cycles based on
+    // whether the user has logged anything yet.
     private var searchHelper: some View {
-        Text("Try: best in SF")
-            .font(.system(size: 11, weight: .medium))
-            .foregroundStyle(Color(hex: "6B6B70"))
-            .padding(.horizontal, 18)
+        Group {
+            if store.visitedRestaurants.isEmpty {
+                Text("Search by name, dish, city, or cuisine")
+            } else {
+                Text("Try: \u{201C}ramen\u{201D}, \u{201C}best in SF\u{201D}, or \u{201C}where should I take Maya\u{201D}")
+            }
+        }
+        .font(.system(size: 11, weight: .medium))
+        .foregroundStyle(Color(hex: "6B6B70"))
+        .padding(.horizontal, 18)
     }
 
     // Title-case section label for the home screen. The all-caps `sectionLabel`
@@ -159,96 +213,477 @@ struct MyPlacesTestView: View {
     }
 
     // =========================================================================
-    // MARK: - Search Results Section (live)
+    // MARK: - Search Results Section (LocalSearchIndex-backed)
     // =========================================================================
+
+    /// Live search hits drawn from the user's own + table data.
+    private var localHits: [LocalSearchHit] {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return [] }
+        return LocalSearchIndex.search(
+            query: q,
+            myRestaurants: store.restaurants,
+            tableRestaurants: tableRestaurants,
+            currentUid: currentUid,
+            limit: 12
+        )
+    }
+
+    /// Best-in-city shortcut row (preserves the prior smart-query for cities).
+    private var cityShortcut: SuggestedQuery? {
+        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
+        guard q.hasPrefix("best in ") || q.hasPrefix("best places in ") else { return nil }
+        let city = q.replacingOccurrences(of: "best places in ", with: "")
+                    .replacingOccurrences(of: "best in ", with: "")
+                    .trimmingCharacters(in: .whitespaces)
+        guard !city.isEmpty else { return nil }
+        return SuggestedQuery(
+            question: "Best in \(city.capitalized)?",
+            answerPreview: answerPreview(forCity: city),
+            target: .city(city.capitalized)
+        )
+    }
+
+    private var shouldShowAskRow: Bool {
+        AskEscalationTrigger.shouldOffer(
+            query: query,
+            localHitCount: localHits.count
+        )
+    }
 
     private var searchResultsSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if searchResults.isEmpty {
+            // Ask ForkBook escalation row — first when triggered.
+            if shouldShowAskRow {
+                askEscalationRow
+            }
+
+            // Inline answer card (renders only for the most recent asked query).
+            if let asked = lastAskedQuery,
+               asked == query.trimmingCharacters(in: .whitespaces),
+               let answer = askService.lastAnswer {
+                askAnswerCard(answer: answer)
+            } else if askService.isLoading {
+                askLoadingCard
+            } else if let err = askService.error,
+                      lastAskedQuery == query.trimmingCharacters(in: .whitespaces) {
+                askErrorCard(err)
+            }
+
+            // City shortcut, if applicable.
+            if let shortcut = cityShortcut {
+                queryRow(shortcut)
+            }
+
+            if localHits.isEmpty && !shouldShowAskRow {
                 Text("No matches")
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color(hex: "6B6B70"))
                     .padding(.horizontal, 22)
+            } else if localHits.isEmpty {
+                // Triggered Ask but no local hits — soft prompt.
+                Text("Nothing in your places matches \u{2014} ask above to look broader.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Color(hex: "6B6B70"))
+                    .padding(.horizontal, 22)
             } else {
-                ForEach(searchResults) { result in
-                    queryRow(result)
+                ForEach(localHits) { hit in
+                    hitRow(hit)
                 }
             }
         }
         .padding(.horizontal, 16)
     }
 
-    // Compose live suggestions from real data
-    private var searchResults: [SuggestedQuery] {
-        let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        guard !q.isEmpty else { return [] }
-        var out: [SuggestedQuery] = []
-
-        // Explicit best-in-city pattern
-        if q.hasPrefix("best in ") || q.hasPrefix("best places in ") {
-            let city = q.replacingOccurrences(of: "best places in ", with: "")
-                        .replacingOccurrences(of: "best in ", with: "")
-                        .trimmingCharacters(in: .whitespaces)
-            if !city.isEmpty {
-                out.append(SuggestedQuery(
-                    question: "Best in \(city.capitalized)?",
-                    answerPreview: answerPreview(forCity: city),
-                    target: .city(city.capitalized)
-                ))
-            }
-        }
-
-        // Match by restaurant name
-        for r in store.visitedRestaurants {
-            if r.name.lowercased().contains(q) {
-                out.append(SuggestedQuery(
-                    question: "Have I been to \(r.name)?",
-                    answerPreview: "\(r.visitCount) visit\(r.visitCount == 1 ? "" : "s") \u{00B7} \(ratingText(for: r))",
-                    target: .place(r.id.uuidString)
-                ))
-            }
-        }
-
-        // Match by dish
-        for r in store.visitedRestaurants {
-            if let dish = r.likedDishes.first(where: { $0.name.lowercased().contains(q) }) {
-                let exists = out.contains(where: {
-                    if case .place(let pid) = $0.target { return pid == r.id.uuidString }
-                    return false
-                })
-                if !exists {
-                    out.append(SuggestedQuery(
-                        question: "Had \(dish.name) at \(r.name)",
-                        answerPreview: ratingText(for: r),
-                        target: .place(r.id.uuidString)
-                    ))
-                }
-            }
-        }
-
-        // Match by city
-        let cities = uniqueCities.filter { $0.lowercased().contains(q) }
-        for city in cities.prefix(3) {
-            let exists = out.contains(where: {
-                if case .city(let c) = $0.target { return c.lowercased() == city.lowercased() }
-                return false
-            })
-            if !exists {
-                out.append(SuggestedQuery(
-                    question: "Best in \(city)?",
-                    answerPreview: answerPreview(forCity: city),
-                    target: .city(city)
-                ))
-            }
-        }
-
-        return Array(out.prefix(6))
-    }
-
     private func answerPreview(forCity city: String) -> String {
         let topNames = topPicks(in: city).prefix(3).map(\.name)
         if topNames.isEmpty { return "No places yet" }
         return topNames.joined(separator: ", ")
+    }
+
+    // =========================================================================
+    // MARK: - Ask ForkBook escalation
+    // =========================================================================
+
+    private var askEscalationRow: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            runAsk()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.fbAccent1.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.fbAccent1)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ask ForkBook")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    Text("\u{201C}\(query.trimmingCharacters(in: .whitespaces))\u{201D}")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text("\u{2192}")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.fbAccent1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.fbAccent1.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.fbAccent1.opacity(0.18), lineWidth: 1)
+            )
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    private var askLoadingCard: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .tint(Color.fbWarm)
+                .scaleEffect(0.8)
+            Text("Thinking\u{2026}")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4"))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Color.fbWarm.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Color.fbWarm.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func askErrorCard(_ message: String) -> some View {
+        Text(message)
+            .font(.system(size: 12, weight: .medium))
+            .foregroundStyle(Color.fbRed.opacity(0.9))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.fbRed.opacity(0.06))
+            )
+    }
+
+    private func askAnswerCard(answer: AskForkBookService.ForkBookAnswer) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.fbAccent1)
+                Text("FORKBOOK")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.4)
+                    .foregroundStyle(Color.fbWarm)
+            }
+
+            Text(answer.text)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.fbText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !answer.suggestions.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(Array(answer.suggestions.enumerated()), id: \.offset) { _, s in
+                        suggestionRow(s)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Color.fbWarm.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Color.fbWarm.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func suggestionRow(_ s: AskForkBookService.Suggestion) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            // Try to deep-link into the user's own place, then table place.
+            if let mine = store.restaurants.first(where: {
+                LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name)
+            }) {
+                navigate(.place(mine.id.uuidString))
+                query = ""
+                searchFocused = false
+            } else {
+                let entries = tableRestaurants.filter {
+                    LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name)
+                }
+                if !entries.isEmpty {
+                    selectedTableHit = LocalSearchHit(
+                        id: "t:\(LocalSearchIndex.normalizeName(s.name))",
+                        name: s.name,
+                        cuisine: entries.first?.cuisine ?? .other,
+                        address: entries.first?.address ?? "",
+                        city: "",
+                        leadDish: nil,
+                        otherDishes: [],
+                        score: 0,
+                        matchedFields: [],
+                        myTier: 5,
+                        mine: nil,
+                        tableEntries: entries,
+                        provenance: .table(memberNames: Array(Set(entries.map {
+                            $0.userName.components(separatedBy: " ").first ?? $0.userName
+                        })))
+                    )
+                }
+            }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(Color.fbAccent1.opacity(0.85))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(s.name)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    Text(s.reason)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    private func runAsk() {
+        let q = query.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        lastAskedQuery = q
+        Task {
+            await askService.ask(
+                question: q,
+                myRestaurants: store.restaurants,
+                tableRestaurants: tableRestaurants,
+                members: tableMembers,
+                tastePrefs: TastePreferences()
+            )
+        }
+    }
+
+    // =========================================================================
+    // MARK: - Local Hit Row (shared rendering for mine + table)
+    // =========================================================================
+
+    private func hitRow(_ hit: LocalSearchHit) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            openHit(hit)
+        } label: {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                    Text(hit.name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                        .lineLimit(1)
+                    Spacer(minLength: 0)
+                    hitProvenanceBadge(hit)
+                }
+
+                let metaParts: [String] = {
+                    var parts: [String] = []
+                    if hit.cuisine != .other { parts.append(hit.cuisine.rawValue) }
+                    if !hit.city.isEmpty { parts.append(hit.city) }
+                    return parts
+                }()
+                if !metaParts.isEmpty {
+                    Text(metaParts.joined(separator: " \u{00B7} "))
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "8E8E93"))
+                        .lineLimit(1)
+                }
+
+                if let lead = hit.leadDish {
+                    let extras = hit.otherDishes.isEmpty
+                        ? ""
+                        : " \u{00B7} also: \(hit.otherDishes.joined(separator: ", "))"
+                    Text("Get the \(lead)\(extras)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Color.fbWarm)
+                        .lineLimit(1)
+                }
+
+                if let trust = hitTrustLine(hit) {
+                    Text(trust)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color(hex: "131517"))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+            )
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    @ViewBuilder
+    private func hitProvenanceBadge(_ hit: LocalSearchHit) -> some View {
+        switch hit.provenance {
+        case .mine:
+            if let r = hit.mine, r.isGoTo {
+                badgeChip("Go-to", color: .fbWarm)
+            } else if let r = hit.mine, r.reaction == .loved {
+                badgeChip("Loved", color: .fbWarm)
+            } else {
+                badgeChip("Yours", color: Color(hex: "8E8E93"))
+            }
+        case .both:
+            badgeChip("You + table", color: .fbWarm)
+        case .table:
+            badgeChip("From table", color: .fbWarm)
+        }
+    }
+
+    private func badgeChip(_ text: String, color: Color) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .heavy))
+            .tracking(0.6)
+            .foregroundStyle(color)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(color.opacity(0.10)))
+            .overlay(Capsule().stroke(color.opacity(0.22), lineWidth: 1))
+    }
+
+    private func hitTrustLine(_ hit: LocalSearchHit) -> String? {
+        switch hit.provenance {
+        case .mine:
+            if let r = hit.mine, r.visitCount >= 2 {
+                return "\(r.visitCount) visits \u{00B7} \(r.relativeVisitDate.lowercased())"
+            }
+            if let r = hit.mine, !r.relativeVisitDate.isEmpty {
+                return "Visited \(r.relativeVisitDate.lowercased())"
+            }
+            return nil
+        case .both(let names), .table(let names):
+            if names.count >= 3 {
+                return "\(names[0]), \(names[1]) & \(names.count - 2) more"
+            }
+            if names.count == 2 { return "\(names[0]) & \(names[1])" }
+            if let first = names.first { return "\(first) from your table" }
+            return nil
+        }
+    }
+
+    private func openHit(_ hit: LocalSearchHit) {
+        if let r = hit.mine {
+            navigate(.place(r.id.uuidString))
+            query = ""
+            searchFocused = false
+        } else {
+            selectedTableHit = hit
+        }
+    }
+
+    // =========================================================================
+    // MARK: - Table Hit Sheet (for table-only places)
+    // =========================================================================
+
+    private func tableHitSheet(_ hit: LocalSearchHit) -> some View {
+        NavigationStack {
+            ScrollView(.vertical, showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    Text(hit.name)
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.5)
+                        .foregroundStyle(Color.fbText)
+                        .padding(.bottom, 4)
+
+                    let meta: String = {
+                        var parts: [String] = []
+                        if hit.cuisine != .other { parts.append(hit.cuisine.rawValue) }
+                        if !hit.city.isEmpty { parts.append(hit.city) }
+                        return parts.joined(separator: " \u{00B7} ")
+                    }()
+                    if !meta.isEmpty {
+                        Text(meta)
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Color(hex: "8E8E93"))
+                    }
+
+                    if let lead = hit.leadDish {
+                        Text("Get the \(lead)")
+                            .font(.system(size: 22, weight: .heavy))
+                            .foregroundStyle(Color.fbWarm)
+                            .padding(.top, 22)
+                        if !hit.otherDishes.isEmpty {
+                            Text("Also try: \(hit.otherDishes.joined(separator: ", "))")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color(hex: "B0B0B4"))
+                                .padding(.top, 4)
+                        }
+                    }
+
+                    if let trust = hitTrustLine(hit) {
+                        Text(trust)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Color.fbWarm.opacity(0.9))
+                            .padding(.top, 18)
+                    }
+
+                    Spacer(minLength: 32)
+                }
+                .padding(24)
+            }
+            .background(Color.fbBg)
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button { selectedTableHit = nil } label: {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundColor(Color(hex: "8E8E93"))
+                    }
+                }
+            }
+        }
     }
 
     // =========================================================================
@@ -588,7 +1023,7 @@ struct MyPlacesTestView: View {
             TextField(
                 "",
                 text: $query,
-                prompt: Text("Ask about places, dishes, cities")
+                prompt: Text("Search your places or ask")
                     .font(.system(size: 14, weight: .medium))
                     .foregroundColor(Color(hex: "B0B0B4"))
             )
@@ -625,74 +1060,21 @@ struct MyPlacesTestView: View {
     }
 
     private func handleSubmit() {
-        if let first = searchResults.first {
-            navigate(first.target)
+        // Prefer opening the strongest local hit; if there's none, fall back
+        // to the city shortcut, then to running an Ask.
+        if let first = localHits.first {
+            openHit(first)
+            return
+        }
+        if let shortcut = cityShortcut {
+            navigate(shortcut.target)
             query = ""
             searchFocused = false
+            return
         }
-    }
-
-    private var chipsRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                ForEach(Array(chipSpecs().enumerated()), id: \.offset) { idx, spec in
-                    chip(
-                        label: spec.label,
-                        active: idx == 0,
-                        action: { navigate(spec.target) }
-                    )
-                }
-            }
-            .padding(.horizontal, 16)
+        if shouldShowAskRow {
+            runAsk()
         }
-    }
-
-    private struct ChipSpec {
-        let label: String
-        let target: Route
-    }
-
-    private func chipSpecs() -> [ChipSpec] {
-        var out: [ChipSpec] = []
-        let top = store.visitedByRelationship.prefix(2)
-        for r in top {
-            out.append(ChipSpec(
-                label: "Have I been to \(r.name)?",
-                target: .place(r.id.uuidString)
-            ))
-        }
-        if let topCity = uniqueCities.first {
-            out.append(ChipSpec(
-                label: "Best in \(topCity)?",
-                target: .city(topCity)
-            ))
-        }
-        return out
-    }
-
-    private func chip(label: String, active: Bool, action: @escaping () -> Void) -> some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            action()
-        } label: {
-            Text(label)
-                .font(.system(size: 12, weight: .bold))
-                .foregroundStyle(active ? Color.fbWarm : Color(hex: "B0B0B4"))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 9)
-                .background(
-                    Capsule()
-                        .fill(active ? Color.fbWarm.opacity(0.08) : Color.white.opacity(0.03))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(
-                            active ? Color.fbWarm.opacity(0.18) : Color.white.opacity(0.06),
-                            lineWidth: 1
-                        )
-                )
-        }
-        .buttonStyle(MyPlacesPressStyle())
     }
 
     // =========================================================================
@@ -1228,39 +1610,6 @@ struct MyPlacesTestView: View {
             }
         }
         return out
-    }
-
-    private var suggestedQueries: [SuggestedQuery] {
-        let top = Array(store.visitedByRelationship.prefix(3))
-        var out: [SuggestedQuery] = []
-        for (idx, r) in top.enumerated() {
-            if idx == 1, let lead = r.leadDish {
-                out.append(SuggestedQuery(
-                    question: "What did I eat at \(r.name)?",
-                    answerPreview: "\(lead.name) \u{00B7} \(r.visitCount) visit\(r.visitCount == 1 ? "" : "s")",
-                    target: .place(r.id.uuidString)
-                ))
-            } else {
-                out.append(SuggestedQuery(
-                    question: "Have I been to \(r.name)?",
-                    answerPreview: "\(r.visitCount) visit\(r.visitCount == 1 ? "" : "s") \u{00B7} \(ratingText(for: r))",
-                    target: .place(r.id.uuidString)
-                ))
-            }
-        }
-        if let topCity = uniqueCities.first {
-            let preview = answerPreview(forCity: topCity)
-            out.append(SuggestedQuery(
-                question: "What should I recommend in \(topCity)?",
-                answerPreview: preview,
-                target: .city(topCity)
-            ))
-        }
-        return out
-    }
-
-    private var quickAccessPlaces: [PlaceMemory] {
-        Array(store.visitedByRelationship.prefix(3)).map { memory(from: $0) }
     }
 
     private func topPicks(in city: String) -> [PlaceMemory] {
