@@ -12,6 +12,7 @@ struct SearchTestView: View {
     @EnvironmentObject var store: RestaurantStore
     @StateObject private var searchService = RestaurantSearchService()
     @ObservedObject private var firestoreService = FirestoreService.shared
+    @ObservedObject private var askService = AskForkBookService.shared
 
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
@@ -23,6 +24,9 @@ struct SearchTestView: View {
     @State private var toastMessage: String?
     @State private var showToast = false
     @State private var showAddPlace = false
+
+    // Ask escalation — same pattern as MyPlaces.
+    @State private var lastAskedQuery: String? = nil
 
     private var currentUid: String? { Auth.auth().currentUser?.uid }
 
@@ -170,12 +174,34 @@ struct SearchTestView: View {
         Array(allTableMatches.dropFirst(5))
     }
 
+    /// Local hits from the user's own data — "have I been here?" recall.
+    /// Filtered to mine-only so we don't double-show table results, which
+    /// the existing `allTableMatches` flow already renders with rich reasoning.
+    private var mineHits: [LocalSearchHit] {
+        guard searchText.count >= 2 else { return [] }
+        let all = LocalSearchIndex.search(
+            query: searchText,
+            myRestaurants: store.restaurants,
+            tableRestaurants: [],            // table covered by allTableMatches
+            currentUid: currentUid,
+            limit: 4
+        )
+        return all
+    }
+
+    private var shouldShowAskRow: Bool {
+        AskEscalationTrigger.shouldOffer(
+            query: searchText,
+            localHitCount: mineHits.count + allTableMatches.count + worthTrying.count
+        )
+    }
+
     private var hasAnyResults: Bool {
-        bestMatch != nil || !worthTrying.isEmpty
+        bestMatch != nil || !worthTrying.isEmpty || !mineHits.isEmpty
     }
 
     private var showNoResults: Bool {
-        searchText.count >= 2 && !hasAnyResults && !searchService.isSearching
+        searchText.count >= 2 && !hasAnyResults && !searchService.isSearching && !shouldShowAskRow
     }
 
     // =========================================================================
@@ -331,6 +357,43 @@ struct SearchTestView: View {
 
     private var decisionResults: some View {
         VStack(alignment: .leading, spacing: 0) {
+
+            // ── ASK ESCALATION (when query is question-shaped or weakly matched) ──
+            if shouldShowAskRow {
+                askEscalationRow
+                    .padding(.horizontal, 16)
+                    .padding(.top, 18)
+            }
+
+            if let asked = lastAskedQuery,
+               asked == searchText.trimmingCharacters(in: .whitespaces),
+               let answer = askService.lastAnswer {
+                askAnswerCard(answer: answer)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+            } else if askService.isLoading {
+                askLoadingCard
+                    .padding(.horizontal, 16)
+                    .padding(.top, 10)
+            }
+
+            // ── SECTION 0: Your Places (memory recall) ──
+            if !mineHits.isEmpty {
+                Text("YOUR PLACES")
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(Self.warmAccent.opacity(0.7))
+                    .padding(.horizontal, 20)
+                    .padding(.top, 24)
+                    .padding(.bottom, 10)
+
+                VStack(spacing: 8) {
+                    ForEach(mineHits) { hit in
+                        mineHitCard(hit)
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
 
             // ── SECTION 1: Best Match ──
             if let best = bestMatch {
@@ -984,15 +1047,379 @@ struct SearchTestView: View {
         let reason: String
     }
 
+    /// Data-driven mood chips: top dishes from table consensus first, then top
+    /// cuisines from the user's own visited places. Falls back to a static set
+    /// only when there's no signal at all.
     private var moodChips: [MoodChip] {
-        [
-            MoodChip(dish: "Pizza", query: "pizza", reason: "Raj gets this weekly"),
-            MoodChip(dish: "Sushi", query: "sushi", reason: "3 spots from your table"),
-            MoodChip(dish: "Ramen", query: "ramen", reason: "Maya\u{2019}s go-to"),
-            MoodChip(dish: "Tacos", query: "tacos", reason: "New spot nearby"),
-            MoodChip(dish: "Indian", query: "indian", reason: "Your table\u{2019}s favorite"),
-            MoodChip(dish: "Italian", query: "italian", reason: "4 spots from your table"),
-        ]
+        var out: [MoodChip] = []
+        var seen: Set<String> = []
+
+        // Top-voted dishes across the table
+        let friendEntries = tableRestaurants.filter { $0.userId != currentUid }
+        var dishVotes: [String: (count: Int, names: Set<String>)] = [:]
+        for e in friendEntries {
+            let firstName = e.userName.components(separatedBy: " ").first ?? e.userName
+            for d in e.likedDishes {
+                let key = d.name.trimmingCharacters(in: .whitespaces)
+                guard !key.isEmpty else { continue }
+                let normKey = key.lowercased()
+                var entry = dishVotes[normKey] ?? (0, [])
+                entry.count += 1
+                entry.names.insert(firstName)
+                dishVotes[normKey] = entry
+            }
+        }
+        let topDishes = dishVotes
+            .filter { $0.value.count >= 2 || $0.value.names.count >= 2 }
+            .sorted { lhs, rhs in
+                if lhs.value.count != rhs.value.count { return lhs.value.count > rhs.value.count }
+                return lhs.value.names.count > rhs.value.names.count
+            }
+            .prefix(3)
+        for (rawKey, info) in topDishes {
+            let display = rawKey.prefix(1).uppercased() + rawKey.dropFirst()
+            let reason: String
+            if info.names.count >= 2 {
+                let arr = Array(info.names)
+                reason = arr.count >= 2 ? "\(arr[0]) & \(arr[1]) get this" : "\(arr[0]) gets this"
+            } else if info.count >= 3 {
+                reason = "\(info.count) people order this"
+            } else if let first = info.names.first {
+                reason = "\(first)'s repeat"
+            } else {
+                reason = "Loved on your table"
+            }
+            seen.insert(rawKey.lowercased())
+            out.append(MoodChip(dish: display, query: rawKey.lowercased(), reason: reason))
+        }
+
+        // Top cuisines from your own visited places (skip ones we already chose)
+        let cuisineCounts = Dictionary(grouping: store.visitedRestaurants, by: { $0.cuisine })
+            .mapValues(\.count)
+            .sorted { $0.value > $1.value }
+            .prefix(4)
+        for (cuisine, count) in cuisineCounts where cuisine != .other {
+            let key = cuisine.rawValue.lowercased()
+            if seen.contains(key) { continue }
+            seen.insert(key)
+            let reason = count >= 4 ? "\(count) of your places" : "Your taste"
+            out.append(MoodChip(dish: cuisine.rawValue, query: key, reason: reason))
+            if out.count >= 6 { break }
+        }
+
+        // Fallback only if we have nothing
+        if out.isEmpty {
+            return [
+                MoodChip(dish: "Pizza", query: "pizza", reason: "Always works"),
+                MoodChip(dish: "Sushi", query: "sushi", reason: "Quick + clean"),
+                MoodChip(dish: "Ramen", query: "ramen", reason: "Cold-night standby"),
+                MoodChip(dish: "Tacos", query: "tacos", reason: "Easy crowd-pleaser"),
+                MoodChip(dish: "Indian", query: "indian", reason: "Bold flavors"),
+                MoodChip(dish: "Italian", query: "italian", reason: "Familiar comfort"),
+            ]
+        }
+        return out
+    }
+
+    // =========================================================================
+    // MARK: - Mine Hit Card (memory recall)
+    // =========================================================================
+
+    private func mineHitCard(_ hit: LocalSearchHit) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            // Surface this as a memory-style detail sheet so the user
+            // doesn't lose context about what they remember.
+            let trustLine: String = {
+                if let r = hit.mine, r.isGoTo { return "Your go-to" }
+                if let r = hit.mine, r.reaction == .loved { return "You loved it" }
+                if let r = hit.mine { return "\(r.visitCount) visit\(r.visitCount == 1 ? "" : "s")" }
+                return "From your places"
+            }()
+            let reasoning: String = {
+                if let lead = hit.leadDish, let r = hit.mine, r.visitCount >= 2 {
+                    return "You\u{2019}ve had the \(lead) \(r.visitCount) times"
+                }
+                if let lead = hit.leadDish { return "Get the \(lead)" }
+                if let r = hit.mine { return "You went here \(r.relativeVisitDate.lowercased())" }
+                return "From your places"
+            }()
+            selectedDetail = SearchDetailData(
+                name: hit.name,
+                cuisine: hit.cuisine.rawValue,
+                location: hit.city,
+                address: hit.address,
+                topDish: hit.leadDish,
+                secondDish: hit.otherDishes.first,
+                reasoning: reasoning,
+                trustLine: trustLine,
+                memberNames: []
+            )
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text(hit.name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Self.lightText)
+                    Spacer()
+                    if let r = hit.mine, r.isGoTo {
+                        mineBadge("Go-to")
+                    } else if let r = hit.mine, r.reaction == .loved {
+                        mineBadge("Loved")
+                    } else if let r = hit.mine, r.visitCount >= 2 {
+                        mineBadge("\(r.visitCount) visits")
+                    } else {
+                        mineBadge("Yours")
+                    }
+                }
+                .padding(.bottom, 4)
+
+                HStack(spacing: 4) {
+                    if hit.cuisine != .other {
+                        Text(hit.cuisine.rawValue)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Self.dimGray)
+                    }
+                    if !hit.city.isEmpty {
+                        Text("\u{00B7}").font(.system(size: 12)).foregroundStyle(Self.dimGray)
+                        Text(hit.city)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Self.dimGray)
+                    }
+                }
+
+                if let lead = hit.leadDish {
+                    Text("Get the \(lead)")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Self.warmAccent)
+                        .padding(.top, 8)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 14)
+            .background(Self.cardBg)
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Self.warmAccent.opacity(0.18), lineWidth: 1)
+            )
+        }
+        .buttonStyle(SearchCardPressStyle())
+    }
+
+    private func mineBadge(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 10, weight: .heavy))
+            .tracking(0.6)
+            .foregroundStyle(Self.warmAccent)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(Capsule().fill(Self.warmAccent.opacity(0.10)))
+            .overlay(Capsule().stroke(Self.warmAccent.opacity(0.24), lineWidth: 1))
+    }
+
+    // =========================================================================
+    // MARK: - Ask ForkBook (escalation row + answer card)
+    // =========================================================================
+
+    private var askEscalationRow: some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            runAsk()
+        } label: {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.fbAccent1.opacity(0.15))
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "sparkles")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundStyle(Color.fbAccent1)
+                }
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Ask ForkBook")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    Text("\u{201C}\(searchText.trimmingCharacters(in: .whitespaces))\u{201D}")
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .lineLimit(1)
+                }
+                Spacer()
+                Text("\u{2192}")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundStyle(Color.fbAccent1)
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(Color.fbAccent1.opacity(0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .stroke(Color.fbAccent1.opacity(0.18), lineWidth: 1)
+            )
+        }
+        .buttonStyle(SearchCardPressStyle())
+    }
+
+    private var askLoadingCard: some View {
+        HStack(spacing: 10) {
+            ProgressView()
+                .tint(Self.warmAccent)
+                .scaleEffect(0.8)
+            Text("Thinking\u{2026}")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4"))
+            Spacer()
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .fill(Self.warmAccent.opacity(0.05))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                .stroke(Self.warmAccent.opacity(0.15), lineWidth: 1)
+        )
+    }
+
+    private func askAnswerCard(answer: AskForkBookService.ForkBookAnswer) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "sparkles")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(Color.fbAccent1)
+                Text("FORKBOOK")
+                    .font(.system(size: 10, weight: .heavy))
+                    .tracking(1.4)
+                    .foregroundStyle(Self.warmAccent)
+            }
+
+            Text(answer.text)
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundStyle(Color.fbText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if !answer.suggestions.isEmpty {
+                VStack(spacing: 8) {
+                    ForEach(Array(answer.suggestions.enumerated()), id: \.offset) { _, s in
+                        askSuggestionRow(s)
+                    }
+                }
+                .padding(.top, 4)
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(Self.warmAccent.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .stroke(Self.warmAccent.opacity(0.18), lineWidth: 1)
+        )
+    }
+
+    private func askSuggestionRow(_ s: AskForkBookService.Suggestion) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            // Try mine → table — same routing as MyPlaces.
+            if let mine = store.restaurants.first(where: {
+                LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name)
+            }) {
+                selectedDetail = SearchDetailData(
+                    name: mine.name,
+                    cuisine: mine.cuisine.rawValue,
+                    location: mine.city,
+                    address: mine.address,
+                    topDish: mine.leadDish?.name,
+                    secondDish: nil,
+                    reasoning: s.reason,
+                    trustLine: mine.relationshipCue ?? "From your places",
+                    memberNames: []
+                )
+            } else if let entry = tableRestaurants.first(where: {
+                LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name)
+            }) {
+                let names = Array(Set(tableRestaurants
+                    .filter { LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name) }
+                    .map { $0.userName.components(separatedBy: " ").first ?? $0.userName }
+                ))
+                selectedDetail = SearchDetailData(
+                    name: entry.name,
+                    cuisine: entry.cuisine.rawValue,
+                    location: shortLocation(from: entry.address),
+                    address: entry.address,
+                    topDish: entry.likedDishes.first?.name,
+                    secondDish: nil,
+                    reasoning: s.reason,
+                    trustLine: buildTrustLine(names: names, visits: 1),
+                    memberNames: names
+                )
+            } else {
+                // Pure suggestion (not in any source) — surface it anyway.
+                selectedDetail = SearchDetailData(
+                    name: s.name,
+                    cuisine: "",
+                    location: "",
+                    address: "",
+                    topDish: nil,
+                    secondDish: nil,
+                    reasoning: s.reason,
+                    trustLine: "Suggested by ForkBook",
+                    memberNames: []
+                )
+            }
+        } label: {
+            HStack(alignment: .top, spacing: 10) {
+                Circle()
+                    .fill(Color.fbAccent1.opacity(0.85))
+                    .frame(width: 6, height: 6)
+                    .padding(.top, 6)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(s.name)
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    Text(s.reason)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+            }
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(Color.white.opacity(0.04))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+        }
+        .buttonStyle(SearchCardPressStyle())
+    }
+
+    private func runAsk() {
+        let q = searchText.trimmingCharacters(in: .whitespaces)
+        guard !q.isEmpty else { return }
+        lastAskedQuery = q
+        Task {
+            await askService.ask(
+                question: q,
+                myRestaurants: store.restaurants,
+                tableRestaurants: tableRestaurants,
+                members: tableMembers,
+                tastePrefs: TastePreferences()
+            )
+        }
     }
 }
 
