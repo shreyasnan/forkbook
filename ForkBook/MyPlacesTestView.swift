@@ -56,38 +56,45 @@ struct MyPlacesTestView: View {
     private var homeScreen: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                headerBlock(title: "My Places", subtitle: "Ask from memory")
+                headerBlock(
+                    title: "Your places",
+                    subtitle: "Your best places, ready when you need a recommendation"
+                )
 
                 searchBar
                     .padding(.horizontal, 16)
                     .padding(.top, 16)
 
+                searchHelper
+                    .padding(.top, 8)
+
                 if !query.trimmingCharacters(in: .whitespaces).isEmpty {
                     searchResultsSection
                         .padding(.top, 18)
                 } else {
-                    chipsRow
-                        .padding(.top, 12)
+                    if !mostLovedSpecs.isEmpty {
+                        homeSectionLabel("Your most-loved")
+                            .padding(.top, 22)
+                        mostLovedStrip
+                    }
 
-                    if !suggestedQueries.isEmpty {
-                        sectionLabel("YOU MIGHT ASK")
-                            .padding(.top, 24)
-
-                        VStack(spacing: 10) {
-                            ForEach(suggestedQueries) { q in
-                                queryRow(q)
+                    if !cityRollup.isEmpty {
+                        homeSectionLabel("By city")
+                            .padding(.top, 26)
+                        VStack(spacing: 8) {
+                            ForEach(cityRollup, id: \.name) { c in
+                                cityRow(name: c.name, count: c.count, cuisines: c.cuisines)
                             }
                         }
                         .padding(.horizontal, 16)
                     }
 
-                    if !quickAccessPlaces.isEmpty {
-                        sectionLabel("QUICK ACCESS")
-                            .padding(.top, 24)
-
-                        VStack(spacing: 10) {
-                            ForEach(quickAccessPlaces) { place in
-                                quickPlaceRow(place)
+                    if !recentPlaceSpecs.isEmpty {
+                        homeSectionLabel("Recent places")
+                            .padding(.top, 26)
+                        VStack(spacing: 8) {
+                            ForEach(recentPlaceSpecs) { spec in
+                                recentRow(spec)
                             }
                         }
                         .padding(.horizontal, 16)
@@ -102,6 +109,25 @@ struct MyPlacesTestView: View {
                 Spacer(minLength: 80)
             }
         }
+    }
+
+    // Helper text under search — teaches the smart-query syntax without
+    // resurrecting a separate "you might ask" surface.
+    private var searchHelper: some View {
+        Text("Try: best in SF")
+            .font(.system(size: 11, weight: .medium))
+            .foregroundStyle(Color(hex: "6B6B70"))
+            .padding(.horizontal, 18)
+    }
+
+    // Title-case section label for the home screen. The all-caps `sectionLabel`
+    // is preserved for detail screens that need that scannable rhythm.
+    private func homeSectionLabel(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(Color(hex: "8E8E93"))
+            .padding(.horizontal, 22)
+            .padding(.bottom, 10)
     }
 
     // Empty state when no visited restaurants
@@ -746,6 +772,247 @@ struct MyPlacesTestView: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .stroke(Color.white.opacity(0.05), lineWidth: 1)
+            )
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    // =========================================================================
+    // MARK: - Home V2: Most-loved / City / Recent rows
+    // =========================================================================
+
+    private struct LovedSpec: Identifiable {
+        let id: String
+        let name: String
+        let badge: String
+        let meta: String
+        let stat: String
+        let dishes: String
+    }
+
+    private struct CityRollupRow {
+        let name: String
+        let count: Int
+        let cuisines: String
+    }
+
+    private struct RecentSpec: Identifiable {
+        let id: String
+        let name: String
+        let meta: String
+        let timeAgo: String
+    }
+
+    private var mostLovedSpecs: [LovedSpec] {
+        var out: [LovedSpec] = []
+        for r in store.visitedByRelationship {
+            let badge: String?
+            if r.isGoTo { badge = "Go-to" }
+            else if r.reaction == .loved && r.visitCount >= 2 { badge = "Repeat favorite" }
+            else if r.reaction == .loved { badge = "Worth repeating" }
+            else if r.reaction == .liked && r.visitCount >= 3 { badge = "Comfort pick" }
+            else { badge = nil }
+            guard let b = badge else { continue }
+
+            var metaParts: [String] = []
+            if r.cuisine != .other { metaParts.append(r.cuisine.rawValue) }
+            if !r.city.isEmpty { metaParts.append(r.city) }
+            let meta = metaParts.joined(separator: " \u{00B7} ")
+
+            let stat: String
+            if r.visitCount >= 2 {
+                let timing = r.relativeVisitDate.isEmpty
+                    ? ""
+                    : ", last \(r.relativeVisitDate.lowercased())"
+                stat = "\(r.visitCount) visits\(timing)"
+            } else if !r.relativeVisitDate.isEmpty {
+                stat = "Visited \(r.relativeVisitDate.lowercased())"
+            } else {
+                stat = "1 visit"
+            }
+
+            let dishNames = r.likedDishes.map(\.name)
+            let dishes = Array(dishNames.prefix(3)).joined(separator: ", ")
+
+            out.append(LovedSpec(
+                id: r.id.uuidString,
+                name: r.name,
+                badge: b,
+                meta: meta,
+                stat: stat,
+                dishes: dishes
+            ))
+            if out.count >= 5 { break }
+        }
+        return out
+    }
+
+    private var cityRollup: [CityRollupRow] {
+        uniqueCities.prefix(8).map { city in
+            let count = store.visitedRestaurants
+                .filter { $0.city.lowercased() == city.lowercased() }
+                .count
+            let cuisines = topCuisines(in: city)
+                .prefix(3)
+                .map(\.name)
+                .joined(separator: ", ")
+            return CityRollupRow(name: city, count: count, cuisines: cuisines)
+        }
+    }
+
+    private var recentPlaceSpecs: [RecentSpec] {
+        Array(store.visitedRestaurants.prefix(5)).map { r in
+            var metaParts: [String] = []
+            if r.cuisine != .other { metaParts.append(r.cuisine.rawValue) }
+            if !r.city.isEmpty { metaParts.append(r.city) }
+            let meta = metaParts.joined(separator: " \u{00B7} ")
+            return RecentSpec(
+                id: r.id.uuidString,
+                name: r.name,
+                meta: meta,
+                timeAgo: r.relativeVisitDate
+            )
+        }
+    }
+
+    private var mostLovedStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 12) {
+                ForEach(mostLovedSpecs) { spec in
+                    lovedCard(spec)
+                }
+            }
+            .padding(.horizontal, 16)
+        }
+    }
+
+    private func lovedCard(_ spec: LovedSpec) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            navigate(.place(spec.id))
+        } label: {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(spec.badge)
+                    .font(.system(size: 10, weight: .bold))
+                    .tracking(1.2)
+                    .foregroundStyle(Color.fbWarm)
+                    .padding(.bottom, 8)
+                Text(spec.name)
+                    .font(.system(size: 17, weight: .heavy))
+                    .tracking(-0.3)
+                    .foregroundStyle(Color.fbText)
+                    .lineLimit(1)
+                if !spec.meta.isEmpty {
+                    Text(spec.meta)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "6B6B70"))
+                        .padding(.top, 2)
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 14)
+                Text(spec.stat)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color(hex: "D6D6DA"))
+                    .padding(.bottom, 4)
+                if !spec.dishes.isEmpty {
+                    Text(spec.dishes)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "8E8E93"))
+                        .lineLimit(2)
+                        .multilineTextAlignment(.leading)
+                }
+            }
+            .padding(16)
+            .frame(width: 220, height: 160, alignment: .leading)
+            .background(
+                LinearGradient(
+                    colors: [Color(hex: "18181B"), Color(hex: "131316")],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .stroke(Color.white.opacity(0.05), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.32), radius: 8, x: 0, y: 6)
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    private func cityRow(name: String, count: Int, cuisines: String) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            navigate(.city(name))
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(name)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    if !cuisines.isEmpty {
+                        Text(cuisines)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color(hex: "8E8E93"))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                Text("\(count)")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundStyle(Color.fbWarm)
+                Text("\u{203A}")
+                    .font(.system(size: 14, weight: .medium))
+                    .foregroundStyle(Color(hex: "6B6B70"))
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.fbSurface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
+            )
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    private func recentRow(_ spec: RecentSpec) -> some View {
+        Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            navigate(.place(spec.id))
+        } label: {
+            HStack(alignment: .center, spacing: 12) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(spec.name)
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    if !spec.meta.isEmpty {
+                        Text(spec.meta)
+                            .font(.system(size: 12, weight: .medium))
+                            .foregroundStyle(Color(hex: "8E8E93"))
+                            .lineLimit(1)
+                    }
+                }
+                Spacer()
+                if !spec.timeAgo.isEmpty {
+                    Text(spec.timeAgo)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Color(hex: "6B6B70"))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .fill(Color.fbSurface)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.04), lineWidth: 1)
             )
         }
         .buttonStyle(MyPlacesPressStyle())
