@@ -19,6 +19,7 @@ struct HomeTestView: View {
     @State private var logPrefillName: String = ""
     @State private var logPrefillAddress: String = ""
     @State private var logPrefillCuisine: CuisineType? = nil
+    @State private var selectedOccasion: OccasionTag? = nil
 
     // Table data
     @State private var tableRestaurants: [SharedRestaurant] = []
@@ -48,6 +49,9 @@ struct HomeTestView: View {
                         .padding(.horizontal, 20)
                         .padding(.top, 12)
 
+                    occasionChipRow
+                        .padding(.top, 18)
+
                     let heroes = heroCards
                     let backups = backupCards
 
@@ -63,7 +67,7 @@ struct HomeTestView: View {
                     }
 
                     if !backups.isEmpty {
-                        Text("OTHER STRONG OPTIONS")
+                        Text(alsoGoodSectionLabel)
                             .font(.system(size: 11, weight: .bold))
                             .tracking(1.5)
                             .foregroundStyle(Self.mutedGray)
@@ -112,26 +116,85 @@ struct HomeTestView: View {
     // =========================================================================
 
     private var homeHeader: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Home")
-                    .font(.system(size: 26, weight: .heavy))
-                    .tracking(-0.5)
-                    .foregroundColor(Color.fbText)
-                Text("Decide quickly")
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundColor(Self.mutedGray)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Home")
+                        .font(.system(size: 26, weight: .heavy))
+                        .tracking(-0.5)
+                        .foregroundColor(Color.fbText)
+                    Text("Recommendations from your table")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(Self.mutedGray)
+                }
+                Spacer()
+                Button { showProfile = true } label: {
+                    RingedAvatarView(
+                        name: Auth.auth().currentUser?.displayName ?? "User",
+                        size: 32,
+                        photoData: ProfilePhotoStore.shared.load(),
+                        showRing: true
+                    )
+                }
             }
-            Spacer()
-            Button { showProfile = true } label: {
-                RingedAvatarView(
-                    name: Auth.auth().currentUser?.displayName ?? "User",
-                    size: 32,
-                    photoData: ProfilePhotoStore.shared.load(),
-                    showRing: true
-                )
-            }
+
+            Text("Based on real visits, saved places, and what people actually ordered.")
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
+                .fixedSize(horizontal: false, vertical: true)
+                .padding(.top, 2)
         }
+    }
+
+    // MARK: - Occasion chip row
+
+    private var occasionChipRow: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(OccasionClassifier.homeChipOrder, id: \.self) { tag in
+                    occasionChip(tag)
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+    }
+
+    private func occasionChip(_ tag: OccasionTag) -> some View {
+        let active = selectedOccasion == tag
+        return Button {
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            withAnimation(.easeInOut(duration: 0.18)) {
+                selectedOccasion = active ? nil : tag
+                currentHeroIndex = 0
+            }
+        } label: {
+            Text(tag.chipLabel)
+                .font(.system(size: 13, weight: .bold))
+                .foregroundStyle(active ? Self.warmAccent : Color(hex: "B0B0B4"))
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(
+                    Capsule()
+                        .fill(active ? Self.warmAccent.opacity(0.10)
+                                     : Color.white.opacity(0.03))
+                )
+                .overlay(
+                    Capsule()
+                        .stroke(
+                            active ? Self.warmAccent.opacity(0.40)
+                                   : Color.white.opacity(0.06),
+                            lineWidth: 1
+                        )
+                )
+        }
+        .buttonStyle(HomeCardPressStyle())
+    }
+
+    private var alsoGoodSectionLabel: String {
+        if let tag = selectedOccasion {
+            return "ALSO GOOD FOR \(tag.sectionUppercase)"
+        }
+        return "OTHER STRONG OPTIONS"
     }
 
     private var emptyState: some View {
@@ -255,12 +318,19 @@ struct HomeTestView: View {
                 Text(hero.supportingDishes.joined(separator: " \u{00B7} "))
                     .font(.system(size: 14, weight: .medium))
                     .foregroundStyle(Color(hex: "B0B0B4"))
-                    .padding(.bottom, 16)
+                    .padding(.bottom, hero.socialProof == nil ? 16 : 10)
+            }
+
+            if let social = hero.socialProof {
+                Text(social)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Self.warmAccent)
+                    .padding(.bottom, 14)
             }
 
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Self.warmAccent)
+                .foregroundStyle(Self.warmAccent.opacity(0.85))
                 .padding(.bottom, hero.changedConfidence == nil ? 22 : 10)
 
             if let changed = hero.changedConfidence {
@@ -358,13 +428,14 @@ struct HomeTestView: View {
         .onTapGesture {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
             selectedHero = HeroCardData(
-                eyebrow: "OTHER STRONG OPTIONS",
+                eyebrow: alsoGoodSectionLabel,
                 restaurant: backup.restaurant,
                 meta: backup.meta,
                 directive: backup.directive,
                 heroDish: backup.heroDish,
                 supportingDishes: backup.supportingDishes,
                 trustLine: backup.trustLine,
+                socialProof: backup.socialProof,
                 changedConfidence: backup.changedConfidence
             )
         }
@@ -482,10 +553,17 @@ struct HomeTestView: View {
                             .padding(.bottom, 3)
                     }
 
+                    if let social = hero.socialProof {
+                        Text(social)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Self.warmAccent)
+                            .padding(.top, 18)
+                    }
+
                     Text(hero.trustLine)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Self.warmAccent.opacity(0.8))
-                        .padding(.top, 18)
+                        .padding(.top, hero.socialProof == nil ? 18 : 8)
                         .padding(.bottom, hero.changedConfidence == nil ? 36 : 10)
 
                     if let changed = hero.changedConfidence {
@@ -673,6 +751,7 @@ struct HomeTestView: View {
         let freshestDaysAgo: Int?
         let recentEntryCount: Int      // entries in last 14d
         let changedConfidence: String? // why this moved up
+        let occasionScores: [OccasionTag: Double]
         let score: Int
     }
 
@@ -757,6 +836,18 @@ struct HomeTestView: View {
                 return nil
             }()
 
+            // Combined dish-name corpus for classification: circle liked
+            // dishes + user's own liked dishes if we have an entry.
+            var dishNames = allLikedDishes.map { $0.name }
+            if let mine = myEntry { dishNames.append(contentsOf: mine.likedDishes.map { $0.name }) }
+            let occ = OccasionClassifier.classify(
+                cuisine: ref.cuisine,
+                dishNames: dishNames,
+                visitCount: max(totalVisits, myEntry?.visitCount ?? 0),
+                reaction: myEntry?.reaction,
+                isGoTo: myEntry?.isGoTo ?? false
+            )
+
             out.append(ScoredCandidate(
                 name: ref.name,
                 cuisine: ref.cuisine,
@@ -773,6 +864,7 @@ struct HomeTestView: View {
                 freshestDaysAgo: freshestDays,
                 recentEntryCount: recentCount,
                 changedConfidence: changed,
+                occasionScores: occ,
                 score: score
             ))
         }
@@ -811,6 +903,14 @@ struct HomeTestView: View {
                 return nil
             }()
 
+            let occ = OccasionClassifier.classify(
+                cuisine: r.cuisine,
+                dishNames: r.likedDishes.map { $0.name },
+                visitCount: r.visitCount,
+                reaction: r.reaction,
+                isGoTo: r.isGoTo
+            )
+
             out.append(ScoredCandidate(
                 name: r.name,
                 cuisine: r.cuisine,
@@ -827,6 +927,7 @@ struct HomeTestView: View {
                 freshestDaysAgo: freshDays,
                 recentEntryCount: 0,
                 changedConfidence: soloChanged,
+                occasionScores: occ,
                 score: score
             ))
         }
@@ -834,15 +935,36 @@ struct HomeTestView: View {
         return out.sorted { $0.score > $1.score }
     }
 
+    /// Candidates filtered + re-ranked for the currently-selected occasion chip.
+    /// When no chip is selected, returns `rankedCandidates` unchanged.
+    private var candidatesForActiveOccasion: [ScoredCandidate] {
+        let all = rankedCandidates
+        guard let tag = selectedOccasion else { return all }
+        let threshold = OccasionClassifier.assignmentThreshold
+
+        return all
+            .compactMap { c -> (ScoredCandidate, Int)? in
+                let occ = c.occasionScores[tag] ?? 0
+                guard occ >= threshold else { return nil }
+                // Boost score by occasion-fit so the best-fit card rises to top.
+                let boost = Int((occ - threshold) * 60) // 0 .. ~33 pts
+                return (c, c.score + boost)
+            }
+            .sorted { $0.1 > $1.1 }
+            .map { $0.0 }
+    }
+
     /// Top 1 (or 2) as heroes, rest as backups.
+    /// When an occasion chip is active, source comes from the filtered list so
+    /// heroes and backups both honor the chip selection.
     private var heroCards: [HeroCardData] {
-        let candidates = rankedCandidates
+        let candidates = candidatesForActiveOccasion
         guard !candidates.isEmpty else { return [] }
         return Array(candidates.prefix(1)).map { buildHero(from: $0) }
     }
 
     private var backupCards: [BackupCardData] {
-        let candidates = rankedCandidates
+        let candidates = candidatesForActiveOccasion
         guard candidates.count > 1 else { return [] }
         return Array(candidates.dropFirst().prefix(5)).map { buildBackup(from: $0) }
     }
@@ -873,6 +995,11 @@ struct HomeTestView: View {
             : (c.userLoved ? "You loved it here" : "Solid pick")
 
         let eyebrow: String = {
+            // When an occasion chip is active and we have any table signal,
+            // lean on the simple "FROM YOUR TABLE" framing from the mock.
+            if selectedOccasion != nil && c.memberNames.count >= 1 {
+                return "FROM YOUR TABLE"
+            }
             if c.memberNames.count >= 3 {
                 return "YOUR TABLE\u{2019}S PICK FOR TONIGHT"
             }
@@ -891,6 +1018,27 @@ struct HomeTestView: View {
             userSignal: userSignalText(c)
         )
 
+        // Social-proof line: "N people from your table got this"
+        // Prefer top-dish endorsement count; fall back to member count.
+        let socialProof: String? = {
+            if c.topDishCount >= 2 {
+                return "\(c.topDishCount) people from your table got this"
+            }
+            if c.memberNames.count >= 2 {
+                return "\(c.memberNames.count) people from your table loved it"
+            }
+            return nil
+        }()
+
+        // Category-aware changed-confidence: when a chip is active, the hero
+        // is the top match for that category — say so explicitly.
+        let changed: String? = {
+            if let tag = selectedOccasion {
+                return "Strongest \(tag.contextualPhrase) signal right now"
+            }
+            return c.changedConfidence
+        }()
+
         return HeroCardData(
             eyebrow: eyebrow,
             restaurant: c.name,
@@ -899,7 +1047,8 @@ struct HomeTestView: View {
             heroDish: dish,
             supportingDishes: c.supportingDishes,
             trustLine: trustLine,
-            changedConfidence: c.changedConfidence
+            socialProof: socialProof,
+            changedConfidence: changed
         )
     }
 
@@ -940,6 +1089,7 @@ struct HomeTestView: View {
             heroDish: c.topDish ?? extractDish(from: directive),
             supportingDishes: c.supportingDishes,
             trustLine: trustLine,
+            socialProof: nil,      // kept off backups — hero carries the warm line
             changedConfidence: c.changedConfidence
         )
     }
@@ -997,6 +1147,7 @@ struct HeroCardData: Identifiable {
     let heroDish: String
     let supportingDishes: [String]
     let trustLine: String
+    let socialProof: String?
     let changedConfidence: String?
 }
 
@@ -1008,6 +1159,7 @@ struct BackupCardData: Identifiable {
     let heroDish: String
     let supportingDishes: [String]
     let trustLine: String
+    let socialProof: String?
     let changedConfidence: String?
 }
 
