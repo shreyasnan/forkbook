@@ -200,6 +200,84 @@ enum MockTableData {
             rating: 4, dishes: [("Flatbread", true)],
             daysSinceVisit: 45, lat: 37.7749, lng: -122.4376))
 
+        // =====================================================================
+        // MARK: Additional restaurants sourced from bay_area_menus DB
+        // =====================================================================
+
+        // MARK: Pragya (cont.) — More Japanese depth
+
+        result.append(entry("mock_pragya", "Nara", "518 Haight St, San Francisco", .japanese,
+            rating: 5, dishes: [("O-Toro", true), ("Hamachi", true), ("Ikura", true)],
+            visitCount: 3, daysSinceVisit: 7, lat: 37.7716, lng: -122.4313))
+
+        result.append(entry("mock_pragya", "Ebisu", "1283 9th Ave, San Francisco", .japanese,
+            rating: 4, dishes: [("Hamachi Sashimi", true), ("Aji Tataki", true)],
+            visitCount: 2, daysSinceVisit: 14, lat: 37.7634, lng: -122.4660))
+
+        result.append(entry("mock_pragya", "Shizen", "370 14th St, San Francisco", .japanese,
+            rating: 5, dishes: [("Spicy Garlic Miso Ramen", true), ("Shiitake Maki", true)],
+            daysSinceVisit: 20, lat: 37.7679, lng: -122.4194))
+
+        // MARK: Puneet (cont.) — Indian breadth
+
+        result.append(entry("mock_puneet", "Dishoom", "1 Kearny St, San Francisco", .indian,
+            rating: 5, dishes: [("Chicken Ruby", true), ("Charred Lamb Chops", true), ("Bhel", true)],
+            visitCount: 2, daysSinceVisit: 4, lat: 37.7900, lng: -122.4033))
+
+        result.append(entry("mock_puneet", "Masala Dosa", "981 Valencia St, San Francisco", .indian,
+            rating: 4, dishes: [("Samosa", true), ("Aloo Gobi", true), ("Bhindi Masala", true)],
+            visitCount: 3, daysSinceVisit: 11, lat: 37.7575, lng: -122.4212))
+
+        result.append(entry("mock_puneet", "Chaat Corner", "55 E 3rd Ave, San Mateo", .indian,
+            rating: 4, dishes: [("Pav Bhaji", true), ("Chole Bhature", true)],
+            daysSinceVisit: 19, lat: 37.5633, lng: -122.3232))
+
+        // MARK: Ankita (cont.) — Date-night / French / Mediterranean
+
+        result.append(entry("mock_ankita", "Chouchou", "400 Dewey Blvd, San Francisco", .french,
+            rating: 5, dishes: [("Boeuf Bourguignon", true), ("Cassoulet", true), ("Baked Brie", true)],
+            visitCount: 2, daysSinceVisit: 8, lat: 37.7444, lng: -122.4642))
+
+        result.append(entry("mock_ankita", "Frascati", "1901 Hyde St, San Francisco", .mediterranean,
+            rating: 5, dishes: [("Fresh Fettuccini", true), ("Burrata", true), ("Panna Cotta", true)],
+            visitCount: 3, daysSinceVisit: 13, lat: 37.7939, lng: -122.4185))
+
+        result.append(entry("mock_ankita", "Starbelly", "3583 16th St, San Francisco", .mediterranean,
+            rating: 4, dishes: [("Baked Eggs", true), ("Biscuits and Gravy", true)],
+            daysSinceVisit: 22, lat: 37.7641, lng: -122.4318))
+
+        // MARK: Pratha (cont.) — More Chinese variety
+
+        result.append(entry("mock_pratha", "Terra Cotta Warrior", "2555 Judah St, San Francisco", .chinese,
+            rating: 5, dishes: [("Biang-Biang Noodles", true), ("Lamb Burger", true)],
+            visitCount: 4, daysSinceVisit: 5, lat: 37.7608, lng: -122.4900))
+
+        result.append(entry("mock_pratha", "Laughing Buddha", "1413 Clement St, San Francisco", .chinese,
+            rating: 4, dishes: [("Triple Mushroom Chow Mein", true), ("Kung Pao Tofu", true)],
+            visitCount: 2, daysSinceVisit: 12, lat: 37.7828, lng: -122.4645))
+
+        result.append(entry("mock_pratha", "House of Thai", "901 Larkin St, San Francisco", .thai,
+            rating: 4, dishes: [("Pad Thai", true), ("Mango Sticky Rice", true)],
+            daysSinceVisit: 17, lat: 37.7870, lng: -122.4173))
+
+        // MARK: Jay (cont.) — More adventurous range
+
+        result.append(entry("mock_jay", "Farmhouse Kitchen", "710 Florida St, San Francisco", .thai,
+            rating: 5, dishes: [("24 Hours Beef Noodle Soup", true), ("Basil Bomb", true)],
+            visitCount: 3, daysSinceVisit: 6, lat: 37.7615, lng: -122.4115))
+
+        result.append(entry("mock_jay", "Lao Table", "149 2nd St, San Francisco", .other,
+            rating: 5, dishes: [("Crying Tiger Steak", true), ("Nam Khao Crispy Rice", true), ("Larb Duck", true)],
+            visitCount: 2, daysSinceVisit: 10, lat: 37.7864, lng: -122.3994))
+
+        result.append(entry("mock_jay", "lily", "419 O'Farrell St, San Francisco", .vietnamese,
+            rating: 5, dishes: [("Garlic Noodle", true), ("Shaking Beef Salad", true), ("Bun Cha Hanoi", true)],
+            daysSinceVisit: 15, lat: 37.7860, lng: -122.4111))
+
+        result.append(entry("mock_jay", "Mission Street Oyster Bar", "2162 Mission St, San Francisco", .other,
+            rating: 4, dishes: [("Clam Chowder", true), ("Alaskan Cod", true)],
+            daysSinceVisit: 30, lat: 37.7628, lng: -122.4195))
+
         return result
     }
 
