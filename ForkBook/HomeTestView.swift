@@ -21,6 +21,9 @@ struct HomeTestView: View {
     @State private var logPrefillCuisine: CuisineType? = nil
     @State private var selectedOccasion: OccasionTag? = nil
 
+    // Committed pick — persisted to UserDefaults so it survives restarts
+    @State private var committedPick: CommittedPick? = nil
+
     // Table data
     @State private var tableRestaurants: [SharedRestaurant] = []
     @State private var tableMembers: [FirestoreService.CircleMember] = []
@@ -55,12 +58,31 @@ struct HomeTestView: View {
                     let heroes = heroCards
                     let backups = backupCards
 
+                    // Committed pick — "Did you go?" card sits above the hero.
+                    if let pick = committedPick, pick.hoursAgo < 24 * 7 {
+                        committedPickCard(pick)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 18)
+                    }
+
                     if !heroes.isEmpty {
+                        // When committed pick is active, show fresh picks
+                        // under a lighter label so they don't compete.
+                        if committedPick != nil {
+                            Text("FRESH PICKS")
+                                .font(.system(size: 11, weight: .bold))
+                                .tracking(1.5)
+                                .foregroundStyle(Self.mutedGray)
+                                .padding(.horizontal, 22)
+                                .padding(.top, 22)
+                                .padding(.bottom, 8)
+                        }
+
                         let idx = min(currentHeroIndex, heroes.count - 1)
                         heroCardView(heroes[idx])
                             .padding(.horizontal, 16)
-                            .padding(.top, 18)
-                    } else {
+                            .padding(.top, committedPick != nil ? 0 : 18)
+                    } else if committedPick == nil {
                         emptyState
                             .padding(.horizontal, 16)
                             .padding(.top, 18)
@@ -107,6 +129,7 @@ struct HomeTestView: View {
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
+            committedPick = CommittedPick.load()
             await loadTableData()
         }
     }
@@ -131,6 +154,156 @@ struct HomeTestView: View {
                 )
             }
         }
+    }
+
+    // =========================================================================
+    // MARK: - Committed Pick Card ("Did you go?")
+    // =========================================================================
+
+    /// Shows when the user previously tapped "Go here" and hasn't logged yet.
+    /// Replaces the hero card with a gentle follow-up nudge.
+    private func committedPickCard(_ pick: CommittedPick) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            // Eyebrow
+            Text("YOUR PLAN")
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.4)
+                .foregroundStyle(Self.warmAccent)
+                .padding(.bottom, 10)
+
+            // Restaurant name
+            Text(pick.name)
+                .font(.system(size: 28, weight: .heavy))
+                .tracking(-0.5)
+                .foregroundStyle(Color.fbText)
+                .padding(.bottom, 4)
+
+            // Meta line (cuisine · time ago)
+            HStack(spacing: 6) {
+                Text(pick.cuisine.rawValue)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Self.mutedGray)
+
+                if pick.hoursAgo < 1 {
+                    Text("\u{00B7} Saved just now")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Self.mutedGray)
+                } else if pick.hoursAgo < 24 {
+                    Text("\u{00B7} Saved \(Int(pick.hoursAgo))h ago")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Self.mutedGray)
+                } else {
+                    let days = Int(pick.hoursAgo / 24)
+                    Text("\u{00B7} Saved \(days)d ago")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Self.mutedGray)
+                }
+            }
+            .padding(.bottom, 14)
+
+            // Dish reminder (if saved)
+            if let dish = pick.bestDish, !dish.isEmpty {
+                Text("Don\u{2019}t forget the \(dish)")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color.fbText)
+                    .padding(.bottom, 16)
+            }
+
+            // Prompt
+            Text("Did you end up going?")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color(hex: "B0B0B4"))
+                .padding(.bottom, 16)
+
+            // CTAs
+            VStack(spacing: 10) {
+                Button {
+                    UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                    logPrefillName = pick.name
+                    logPrefillAddress = pick.address
+                    logPrefillCuisine = pick.cuisine
+                    clearPick()
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                        showAddPlace = true
+                    }
+                } label: {
+                    Text("Yes \u{2014} log my visit")
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 14)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .fill(Self.warmAccent.opacity(0.18))
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                .stroke(Self.warmAccent.opacity(0.35), lineWidth: 1)
+                        )
+                }
+                .buttonStyle(HomeCardPressStyle())
+
+                HStack(spacing: 12) {
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        // Keep the pick — they haven't gone yet but might still.
+                        // Just scroll past to see fresh recommendations below.
+                    } label: {
+                        Text("Not yet")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color(hex: "B0B0B4"))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(HomeCardPressStyle())
+
+                    Button {
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        withAnimation(.easeOut(duration: 0.25)) {
+                            clearPick()
+                        }
+                    } label: {
+                        Text("Changed my mind")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundStyle(Color(hex: "B0B0B4"))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color.white.opacity(0.05))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            )
+                    }
+                    .buttonStyle(HomeCardPressStyle())
+                }
+            }
+        }
+        .padding(22)
+        .background(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [Self.warmAccent.opacity(0.06), Self.cardHero],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 24, style: .continuous)
+                .stroke(Self.warmAccent.opacity(0.12), lineWidth: 1)
+        )
     }
 
     // MARK: - Occasion chip row
@@ -423,7 +596,9 @@ struct HomeTestView: View {
                 supportingDishes: backup.supportingDishes,
                 trustLine: backup.trustLine,
                 socialProof: backup.socialProof,
-                changedConfidence: backup.changedConfidence
+                changedConfidence: backup.changedConfidence,
+                address: backup.address,
+                cuisine: backup.cuisine
             )
         }
     }
@@ -461,6 +636,23 @@ struct HomeTestView: View {
             logPrefillCuisine = nil
         }
         logPrefillAddress = ""
+    }
+
+    // MARK: - Committed Pick Helpers
+
+    private func commitPick(from hero: HeroCardData) {
+        CommittedPick.save(
+            name: hero.restaurant,
+            address: hero.address,
+            cuisine: hero.cuisine,
+            bestDish: hero.heroDish
+        )
+        committedPick = CommittedPick.load()
+    }
+
+    private func clearPick() {
+        CommittedPick.clear()
+        committedPick = nil
     }
 
     /// Open the hero's restaurant in Apple Maps.
@@ -587,7 +779,7 @@ struct HomeTestView: View {
         VStack(spacing: 10) {
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                openInMaps(for: hero)
+                commitPick(from: hero)
                 selectedHero = nil
             } label: {
                 Text("Go here")
@@ -1035,7 +1227,9 @@ struct HomeTestView: View {
             supportingDishes: c.supportingDishes,
             trustLine: trustLine,
             socialProof: socialProof,
-            changedConfidence: changed
+            changedConfidence: changed,
+            address: c.address,
+            cuisine: c.cuisine
         )
     }
 
@@ -1077,7 +1271,9 @@ struct HomeTestView: View {
             supportingDishes: c.supportingDishes,
             trustLine: trustLine,
             socialProof: nil,      // kept off backups — hero carries the warm line
-            changedConfidence: c.changedConfidence
+            changedConfidence: c.changedConfidence,
+            address: c.address,
+            cuisine: c.cuisine
         )
     }
 
@@ -1136,6 +1332,10 @@ struct HeroCardData: Identifiable {
     let trustLine: String
     let socialProof: String?
     let changedConfidence: String?
+
+    // Needed for CommittedPick persistence — not rendered directly on the card.
+    var address: String = ""
+    var cuisine: CuisineType = .other
 }
 
 struct BackupCardData: Identifiable {
@@ -1148,6 +1348,9 @@ struct BackupCardData: Identifiable {
     let trustLine: String
     let socialProof: String?
     let changedConfidence: String?
+
+    var address: String = ""
+    var cuisine: CuisineType = .other
 }
 
 // =========================================================================
