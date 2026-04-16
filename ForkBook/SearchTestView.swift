@@ -1031,6 +1031,7 @@ struct SearchTestView: View {
 
         let realEntries = tableRestaurants.filter { $0.userId != currentUid }
         if realEntries.isEmpty {
+            tableMembers = tableMembers + MockTableData.buildMembers()
             tableRestaurants.append(contentsOf: MockTableData.buildSharedRestaurants())
         }
 

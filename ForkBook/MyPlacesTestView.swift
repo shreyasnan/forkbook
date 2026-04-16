@@ -77,7 +77,12 @@ struct MyPlacesTestView: View {
 
     private func loadTableData() async {
         let circles = await firestoreService.getMyCircles()
-        guard let circle = circles.first else { return }
+        guard let circle = circles.first else {
+            // No circle yet — seed with mock data so search has table signal.
+            tableMembers = MockTableData.buildMembers()
+            tableRestaurants = MockTableData.buildSharedRestaurants()
+            return
+        }
 
         tableMembers = await firestoreService.getCircleMembers(circle: circle)
         var fetched = await firestoreService.getCircleRestaurants(circleId: circle.id)
@@ -87,9 +92,10 @@ struct MyPlacesTestView: View {
             fetched[i].userName = memberMap[fetched[i].userId] ?? "Friend"
         }
 
-        // Mock data fallback when the user's circle is empty (matches SearchTestView).
+        // Mock data fallback when the user's circle has no friend entries.
         let realEntries = fetched.filter { $0.userId != currentUid }
         if realEntries.isEmpty {
+            tableMembers = tableMembers + MockTableData.buildMembers()
             fetched.append(contentsOf: MockTableData.buildSharedRestaurants())
         }
 
