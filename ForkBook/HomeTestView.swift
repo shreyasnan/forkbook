@@ -664,7 +664,10 @@ struct HomeTestView: View {
                     .padding(.bottom, 6)
             }
 
-            Text(backup.trustLine)
+            // Prefer a specific name-led reason ("Puneet's been 3×") when
+            // friend-summary data supports one — gives the tail variety
+            // vs every card reading "Picked by X from your table".
+            Text(backup.namedReason ?? backup.trustLine)
                 .font(.system(size: 12, weight: .semibold))
                 .foregroundStyle(Self.warmAccent)
                 .lineLimit(1)
@@ -1701,6 +1704,37 @@ struct BackupCardData: Identifiable {
 
     var address: String = ""
     var cuisine: CuisineType = .other
+
+    /// Specific, name-led reason to care about this pick — used on backup
+    /// cards instead of the generic `trustLine` when data supports it.
+    /// Variety across the tail is the point: each backup card leads with a
+    /// different "why" (repeat visitor / dish hook / two-friend pair) so
+    /// the list reads like real recommendations rather than wallpaper.
+    /// Returns nil when no clean named hook exists — caller should fall
+    /// back to `trustLine`.
+    var namedReason: String? {
+        let summaries = friendSummaries
+        guard !summaries.isEmpty else { return nil }
+
+        // 1. Repeat visitor is the strongest signal — "Puneet's been 3×"
+        if let repeater = summaries.first(where: { $0.visitCount >= 3 }) {
+            return "\(repeater.name)\u{2019}s been \(repeater.visitCount)\u{00D7}"
+        }
+
+        // 2. Specific dish hook — "Aditya raves about the calzone"
+        if let dishHaver = summaries.first(where: { !$0.likedDishes.isEmpty }),
+           let dish = dishHaver.likedDishes.first, !dish.isEmpty {
+            return "\(dishHaver.name) raves about the \(dish.lowercased())"
+        }
+
+        // 3. Two named friends — shorter, punchier than generic trust line
+        if summaries.count >= 2 {
+            return "\(summaries[0].name) & \(summaries[1].name)"
+        }
+
+        // Fall through to existing trustLine for sparser cases.
+        return nil
+    }
 }
 
 // =========================================================================
