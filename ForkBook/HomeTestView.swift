@@ -500,11 +500,15 @@ struct HomeTestView: View {
 
     private func heroCardView(_ hero: HeroCardData) -> some View {
         let showChanged = hero.changedConfidence.map { !isNewToYouPhrase($0) } ?? false
-        // Dish-as-H1 layout when we have a hero dish to promote. Falls
-        // back to restaurant-as-H1 for sparse data (solo picks, old
-        // entries with no dish logged) so we never show an empty H1.
-        let useDishAsH1 = !hero.heroDish.isEmpty
-        let supportingDish = hero.supportingDishes.first(where: { !$0.isEmpty })
+        // Restaurant-as-H1 — testers didn't want a dish-led hero. The dish
+        // row below shows up to 3 dishes joined with middle-dots so the
+        // card still tells you what to order, just without hijacking the
+        // headline slot.
+        let joinedDishes = Array(
+            ([hero.heroDish] + hero.supportingDishes)
+                .filter { !$0.isEmpty }
+                .prefix(3)
+        ).joined(separator: " \u{00B7} ")
 
         let cardContent = VStack(alignment: .leading, spacing: 0) {
             Text(hero.eyebrow)
@@ -513,90 +517,41 @@ struct HomeTestView: View {
                 .foregroundStyle(Self.mutedGray)
                 .padding(.bottom, 12)
 
-            if useDishAsH1 {
-                // H1: the thing to order. Restaurant demotes to "where"
-                // below so the card reads as a decision ("Get the Calzone
-                // at Lucali") rather than a listing.
-                // "Get the" prefix is hero-only — backups stay declarative
-                // so the hero's imperative voice stays distinctive.
-                Text("Get the \(hero.heroDish)")
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(hero.restaurant)
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(-0.6)
-                    .foregroundStyle(Self.warmAccent)
-                    .lineLimit(2)
-                    .padding(.bottom, 6)
-
-                // "at {Restaurant}" + distance + chevron
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text("at \(hero.restaurant)")
-                        .font(.system(size: 17, weight: .semibold))
-                        .foregroundStyle(Self.lightText)
-                        .lineLimit(1)
-                    Spacer(minLength: 8)
-                    if let distance = hero.distanceText {
-                        Text(distance)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Self.dimGray)
-                    }
-                    Image(systemName: "chevron.right")
+                    .foregroundStyle(Self.lightText)
+                Spacer(minLength: 8)
+                if let distance = hero.distanceText {
+                    Text(distance)
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Self.dimGray)
                 }
-                .padding(.bottom, 4)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Self.dimGray)
+            }
+            .padding(.bottom, 4)
 
-                if !hero.meta.isEmpty {
-                    Text(hero.meta)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Self.dimGray)
-                        .padding(.bottom, 14)
-                }
-
-                if let supporting = supportingDish {
-                    Text("Also good: \(supporting)")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Color(hex: "B0B0B4"))
-                        .padding(.bottom, 14)
-                }
-            } else {
-                // Fallback: restaurant-as-H1 when no hero dish.
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(hero.restaurant)
-                        .font(.system(size: 28, weight: .heavy))
-                        .tracking(-0.6)
-                        .foregroundStyle(Self.lightText)
-                    Spacer(minLength: 8)
-                    if let distance = hero.distanceText {
-                        Text(distance)
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundStyle(Self.dimGray)
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundStyle(Self.dimGray)
-                }
-                .padding(.bottom, 4)
-
-                if !hero.meta.isEmpty {
-                    Text(hero.meta)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Self.dimGray)
-                        .padding(.bottom, 18)
-                }
-
-                if let supporting = supportingDish {
-                    Text(supporting)
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundStyle(Self.lightText)
-                        .padding(.bottom, 14)
-                }
+            if !hero.meta.isEmpty {
+                Text(hero.meta)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Self.dimGray)
+                    .padding(.bottom, 18)
             }
 
-            // Trust line drops to muted off-white so gold is fully
-            // reserved for the dish headline (the thing to order).
-            // Same treatment applied on backup cards below.
+            if !joinedDishes.isEmpty {
+                Text(joinedDishes)
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Self.lightText)
+                    .lineLimit(2)
+                    .padding(.bottom, 14)
+            }
+
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Color(hex: "B0B0B4"))
+                .foregroundStyle(Self.warmAccent)
 
             if showChanged, let changed = hero.changedConfidence {
                 HStack(spacing: 6) {
@@ -605,7 +560,7 @@ struct HomeTestView: View {
                         .frame(width: 6, height: 6)
                     Text(changed)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .foregroundStyle(Self.mutedGray)
                 }
                 .padding(.top, 10)
             }
@@ -630,80 +585,53 @@ struct HomeTestView: View {
     // =========================================================================
 
     private func backupCard(_ backup: BackupCardData) -> some View {
-        // Dish-led when we have a heroDish (matches the hero card's shape
-        // so the whole feed reads as decision-first). No "Get the" prefix
-        // on backups — the imperative voice is hero-exclusive, backups
-        // stay declarative. Falls back to restaurant-as-H1 when no dish.
-        let useDishAsH1 = !backup.heroDish.isEmpty
+        // Restaurant-as-H1, matching the hero. Dishes show as a joined
+        // top-3 line under the meta row so the tail still tells you what
+        // to order without competing with the restaurant name.
+        let joinedDishes = Array(
+            ([backup.heroDish] + backup.supportingDishes)
+                .filter { !$0.isEmpty }
+                .prefix(3)
+        ).joined(separator: " \u{00B7} ")
 
         return VStack(alignment: .leading, spacing: 0) {
-            if useDishAsH1 {
-                // Dish + distance + chevron — the headline. Gold to mirror
-                // the hero card; the whole feed reads "gold = the dish to
-                // order, white = everything else."
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(backup.heroDish)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Self.warmAccent)
-                        .lineLimit(2)
-                    Spacer(minLength: 8)
-                    if let distance = backup.distanceText {
-                        Text(distance)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Self.dimGray)
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(backup.restaurant)
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.fbText)
+                Spacer(minLength: 8)
+                if let distance = backup.distanceText {
+                    Text(distance)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Self.dimGray)
                 }
-                .padding(.bottom, 2)
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Self.dimGray)
+            }
+            .padding(.bottom, 3)
 
-                // "at {Restaurant}"
-                Text("at \(backup.restaurant)")
+            if !backup.meta.isEmpty {
+                Text(backup.meta)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Self.dimGray)
+                    .padding(.bottom, 6)
+            }
+
+            if !joinedDishes.isEmpty {
+                Text(joinedDishes)
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundStyle(Color.fbText.opacity(0.85))
                     .lineLimit(1)
-                    .padding(.bottom, 4)
-
-                if !backup.meta.isEmpty {
-                    Text(backup.meta)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Self.dimGray)
-                        .padding(.bottom, 8)
-                }
-            } else {
-                // Fallback: restaurant-as-H1 when no dish data.
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(backup.restaurant)
-                        .font(.system(size: 16, weight: .bold))
-                        .foregroundStyle(Color.fbText)
-                    Spacer(minLength: 8)
-                    if let distance = backup.distanceText {
-                        Text(distance)
-                            .font(.system(size: 12, weight: .semibold))
-                            .foregroundStyle(Self.dimGray)
-                    }
-                    Image(systemName: "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundStyle(Self.dimGray)
-                }
-                .padding(.bottom, 3)
-
-                if !backup.meta.isEmpty {
-                    Text(backup.meta)
-                        .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Self.dimGray)
-                        .padding(.bottom, 8)
-                }
+                    .padding(.bottom, 6)
             }
 
             // Prefer a specific name-led reason ("Puneet's been 3×") when
             // friend-summary data supports one — gives the tail variety
             // vs every card reading "Picked by X from your table".
-            // Muted white so the dish headline owns the gold.
             Text(backup.namedReason ?? backup.trustLine)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Color(hex: "B0B0B4"))
+                .foregroundStyle(Self.warmAccent)
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -1419,10 +1347,10 @@ struct HomeTestView: View {
 
         let dish = c.topDish ?? ""
 
-        // Single decision-first eyebrow. Voice matches the "Get the X"
-        // headline: this IS the pick, here's when. The contextual why
-        // (repeat visitor, personal favorite, fresh log, etc.) moves
-        // entirely to the trust line below — one signal per slot.
+        // Single decision-first eyebrow: this IS the pick, here's when.
+        // The contextual why (repeat visitor, personal favorite, fresh
+        // log, etc.) moves entirely to the trust line below — one
+        // signal per slot.
         let eyebrow: String = {
             if let tag = selectedOccasion {
                 return "THE PICK \u{00B7} \(tag.sectionUppercase)"
