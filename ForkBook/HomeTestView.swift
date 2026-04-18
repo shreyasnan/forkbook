@@ -547,9 +547,7 @@ struct HomeTestView: View {
             }
 
             if !joinedDishes.isEmpty {
-                Text(joinedDishes)
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Self.lightText)
+                heroDishesText(joined: joinedDishes, skipped: hero.skippedDishes)
                     .lineLimit(2)
                     .padding(.bottom, 14)
             }
@@ -583,6 +581,33 @@ struct HomeTestView: View {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 selectedHero = hero
             }
+    }
+
+    /// Composed dish line for the hero card: bold white joined dishes
+    /// followed by a muted "— skip the X" clause when the table has an
+    /// agreed-upon dislike. Returns a single `Text` so SwiftUI wraps
+    /// both segments as one paragraph (with `.lineLimit(2)` applied by
+    /// the caller). Dish names keep their original casing.
+    private func heroDishesText(joined: String, skipped: [String]) -> Text {
+        let base = Text(joined)
+            .font(.system(size: 18, weight: .semibold))
+            .foregroundColor(Self.lightText)
+
+        let cleaned = skipped.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return base }
+
+        let clause: String
+        if cleaned.count == 1 {
+            clause = " \u{2014} skip the \(cleaned[0])"
+        } else {
+            clause = " \u{2014} skip the \(cleaned[0]) or \(cleaned[1])"
+        }
+
+        let tail = Text(clause)
+            .font(.system(size: 18, weight: .regular))
+            .foregroundColor(Self.mutedGray)
+
+        return base + tail
     }
 
     // =========================================================================
@@ -657,6 +682,7 @@ struct HomeTestView: View {
                 meta: backup.meta,
                 heroDish: backup.heroDish,
                 supportingDishes: backup.supportingDishes,
+                skippedDishes: backup.skippedDishes,
                 trustLine: backup.trustLine,
                 socialProof: backup.socialProof,
                 changedConfidence: backup.changedConfidence,
@@ -1078,6 +1104,10 @@ struct HomeTestView: View {
         let longitude: Double?
         let topDish: String?
         let supportingDishes: [String]
+        /// Dishes the table actively thumbed-down. Capped to the top
+        /// 1–2 most-skipped names so the hero card can render a tight
+        /// "skip the X" clause without turning into a warning label.
+        let skippedDishes: [String]
         let memberNames: [String]
         let totalTableVisits: Int
         let topDishCount: Int
@@ -1119,6 +1149,18 @@ struct HomeTestView: View {
             let topDish = dishCounts.first?.key
             let topDishCount = dishCounts.first?.value ?? 0
             let supporting = dishCounts.dropFirst().prefix(2).map(\.key)
+
+            // Aggregate skipped dishes the same way — names the table
+            // actively thumbed-down. Exclude anything that ALSO shows up
+            // as liked (one friend loved it, another didn't) so we don't
+            // contradict ourselves inside the same card.
+            let likedSet = Set(allLikedDishes.map { $0.name.lowercased() })
+            let allSkippedDishes = entries.flatMap { $0.dislikedDishes }
+            let skipCounts = Dictionary(grouping: allSkippedDishes, by: { $0.name })
+                .mapValues { $0.count }
+                .filter { !likedSet.contains($0.key.lowercased()) }
+                .sorted { $0.value > $1.value }
+            let skippedDishes = Array(skipCounts.prefix(2).map(\.key))
 
             let names = Array(Set(entries.map {
                 $0.userName.components(separatedBy: " ").first ?? $0.userName
@@ -1204,6 +1246,7 @@ struct HomeTestView: View {
                 longitude: coordEntry.longitude,
                 topDish: topDish,
                 supportingDishes: Array(supporting),
+                skippedDishes: skippedDishes,
                 memberNames: names,
                 totalTableVisits: totalVisits,
                 topDishCount: topDishCount,
@@ -1245,6 +1288,14 @@ struct HomeTestView: View {
 
             let topDish = r.leadDish?.name
             let supporting = Array(r.likedDishes.dropFirst().prefix(2).map(\.name))
+            // Solo skips: dishes the user themselves thumbed-down here.
+            let soloLikedSet = Set(r.likedDishes.map { $0.name.lowercased() })
+            let soloSkipped = Array(
+                r.dislikedDishes
+                    .map(\.name)
+                    .filter { !soloLikedSet.contains($0.lowercased()) }
+                    .prefix(2)
+            )
 
             let freshDays = r.dateVisited.map {
                 Calendar.current.dateComponents([.day], from: $0, to: Date()).day ?? 999
@@ -1275,6 +1326,7 @@ struct HomeTestView: View {
                 longitude: r.longitude,
                 topDish: topDish,
                 supportingDishes: supporting,
+                skippedDishes: soloSkipped,
                 memberNames: [],
                 totalTableVisits: 0,
                 topDishCount: 0,
@@ -1419,6 +1471,7 @@ struct HomeTestView: View {
             meta: meta,
             heroDish: dish,
             supportingDishes: c.supportingDishes,
+            skippedDishes: c.skippedDishes,
             trustLine: trustLine,
             socialProof: socialProof,
             changedConfidence: changed,
@@ -1470,6 +1523,7 @@ struct HomeTestView: View {
             meta: meta,
             heroDish: c.topDish ?? "",
             supportingDishes: c.supportingDishes,
+            skippedDishes: c.skippedDishes,
             trustLine: trustLine,
             socialProof: nil,      // kept off backups — hero carries the warm line
             changedConfidence: c.changedConfidence,
@@ -1638,6 +1692,10 @@ struct HeroCardData: Identifiable {
     let meta: String
     let heroDish: String
     let supportingDishes: [String]
+    /// Top 1–2 dishes the table actively thumbed-down. Rendered as a
+    /// trailing "— skip the X" clause on the dish row so the card still
+    /// reads as decision-first ("get these, but not that one").
+    let skippedDishes: [String]
     let trustLine: String
     let socialProof: String?
     let changedConfidence: String?
@@ -1655,6 +1713,10 @@ struct BackupCardData: Identifiable {
     let meta: String
     let heroDish: String
     let supportingDishes: [String]
+    /// Same aggregation as HeroCardData. Not rendered on the backup card
+    /// itself (the tail stays tight) but passed through so the detail
+    /// sheet can show it when the user drills in.
+    let skippedDishes: [String]
     let trustLine: String
     let socialProof: String?
     let changedConfidence: String?
