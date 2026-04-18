@@ -627,43 +627,69 @@ struct HomeTestView: View {
     // =========================================================================
 
     private func backupCard(_ backup: BackupCardData) -> some View {
-        let dishes = Array(
-            ([backup.heroDish] + backup.supportingDishes)
-                .filter { !$0.isEmpty }
-                .prefix(2)
-        )
+        // Dish-led when we have a heroDish (matches the hero card's shape
+        // so the whole feed reads as decision-first). No "Get the" prefix
+        // on backups — the imperative voice is hero-exclusive, backups
+        // stay declarative. Falls back to restaurant-as-H1 when no dish.
+        let useDishAsH1 = !backup.heroDish.isEmpty
 
         return VStack(alignment: .leading, spacing: 0) {
-            // Name + distance + chevron (mirrors hero card affordance).
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(backup.restaurant)
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.fbText)
-                Spacer(minLength: 8)
-                if let distance = backup.distanceText {
-                    Text(distance)
-                        .font(.system(size: 12, weight: .semibold))
+            if useDishAsH1 {
+                // Dish + distance + chevron — the headline.
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(backup.heroDish)
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                        .lineLimit(2)
+                    Spacer(minLength: 8)
+                    if let distance = backup.distanceText {
+                        Text(distance)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Self.dimGray)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(Self.dimGray)
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Self.dimGray)
-            }
-            .padding(.bottom, 3)
+                .padding(.bottom, 2)
 
-            if !backup.meta.isEmpty {
-                Text(backup.meta)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Self.dimGray)
-                    .padding(.bottom, 8)
-            }
+                // "at {Restaurant}"
+                Text("at \(backup.restaurant)")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Color.fbText.opacity(0.85))
+                    .lineLimit(1)
+                    .padding(.bottom, 4)
 
-            if !dishes.isEmpty {
-                Text(dishes.joined(separator: " \u{00B7} "))
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(Color.fbText)
-                    .lineLimit(2)
-                    .padding(.bottom, 6)
+                if !backup.meta.isEmpty {
+                    Text(backup.meta)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Self.dimGray)
+                        .padding(.bottom, 8)
+                }
+            } else {
+                // Fallback: restaurant-as-H1 when no dish data.
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(backup.restaurant)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundStyle(Color.fbText)
+                    Spacer(minLength: 8)
+                    if let distance = backup.distanceText {
+                        Text(distance)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(Self.dimGray)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundStyle(Self.dimGray)
+                }
+                .padding(.bottom, 3)
+
+                if !backup.meta.isEmpty {
+                    Text(backup.meta)
+                        .font(.system(size: 12, weight: .medium))
+                        .foregroundStyle(Self.dimGray)
+                        .padding(.bottom, 8)
+                }
             }
 
             // Prefer a specific name-led reason ("Puneet's been 3×") when
