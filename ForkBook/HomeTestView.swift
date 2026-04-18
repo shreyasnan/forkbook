@@ -517,7 +517,9 @@ struct HomeTestView: View {
                 // H1: the thing to order. Restaurant demotes to "where"
                 // below so the card reads as a decision ("Get the Calzone
                 // at Lucali") rather than a listing.
-                Text(hero.heroDish)
+                // "Get the" prefix is hero-only — backups stay declarative
+                // so the hero's imperative voice stays distinctive.
+                Text("Get the \(hero.heroDish)")
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(-0.6)
                     .foregroundStyle(Self.lightText)
