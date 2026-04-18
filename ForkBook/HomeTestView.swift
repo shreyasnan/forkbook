@@ -610,6 +610,18 @@ struct HomeTestView: View {
         return base + tail
     }
 
+    /// Standalone skip line for the detail sheet. Sentence-cased because
+    /// it's its own row (not an inline clause). Returns nil when there's
+    /// nothing to show so the caller can skip the whole row.
+    private func aggregateSkipLine(_ skipped: [String]) -> String? {
+        let cleaned = skipped.filter { !$0.isEmpty }
+        guard !cleaned.isEmpty else { return nil }
+        if cleaned.count == 1 {
+            return "Skip the \(cleaned[0])"
+        }
+        return "Skip the \(cleaned[0]) or \(cleaned[1])"
+    }
+
     // =========================================================================
     // MARK: - Backup Card
     // =========================================================================
@@ -839,6 +851,16 @@ struct HomeTestView: View {
                             .padding(.bottom, 3)
                     }
 
+                    // Aggregate skip line — same signal as the hero card,
+                    // standalone here so the detail page confirms it
+                    // rather than burying it inside a wrapped dish row.
+                    if let skipLine = aggregateSkipLine(hero.skippedDishes) {
+                        Text(skipLine)
+                            .font(.system(size: 14, weight: .medium))
+                            .foregroundStyle(Self.mutedGray)
+                            .padding(.top, 8)
+                    }
+
                     // Per-friend breakdown
                     if !hero.friendSummaries.isEmpty {
                         friendBreakdownSection(hero.friendSummaries)
@@ -931,6 +953,19 @@ struct HomeTestView: View {
                         Text("Liked: \(dishText)")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Self.warmAccent.opacity(0.85))
+                    }
+
+                    // Mirror the "Liked:" format for skips so the receipts
+                    // read symmetrically. Muted so the liked line still
+                    // leads the eye — skips are context, not the headline.
+                    if !friend.skippedDishes.isEmpty {
+                        let skipText = friend.skippedDishes.count <= 2
+                            ? friend.skippedDishes.joined(separator: ", ")
+                            : friend.skippedDishes.prefix(2).joined(separator: ", ")
+                                + " +\(friend.skippedDishes.count - 2) more"
+                        Text("Skipped: \(skipText)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Self.mutedGray)
                     }
                 }
                 .padding(.vertical, 10)
@@ -1453,6 +1488,12 @@ struct HomeTestView: View {
             let name = first.userName.components(separatedBy: " ").first ?? first.userName
             let totalVisits = entries.reduce(0) { $0 + max(1, $1.visitCount) }
             let dishes = Array(Set(entries.flatMap { $0.likedDishes.map(\.name) }))
+            // Per-friend skips, with their own liked-set excluded so we
+            // don't surface a dish they ALSO loved (rare, but possible
+            // across multiple visits).
+            let perFriendLiked = Set(dishes.map { $0.lowercased() })
+            let skipped = Array(Set(entries.flatMap { $0.dislikedDishes.map(\.name) }))
+                .filter { !perFriendLiked.contains($0.lowercased()) }
             let freshestDays: Int? = entries
                 .compactMap { $0.dateVisited }
                 .map { Calendar.current.dateComponents([.day], from: $0, to: now).day ?? 999 }
@@ -1461,6 +1502,7 @@ struct HomeTestView: View {
                 name: name,
                 visitCount: totalVisits,
                 likedDishes: dishes,
+                skippedDishes: skipped,
                 daysAgo: freshestDays
             )
         }.sorted { ($0.daysAgo ?? 999) < ($1.daysAgo ?? 999) }
@@ -1511,11 +1553,14 @@ struct HomeTestView: View {
             let name = first.userName.components(separatedBy: " ").first ?? first.userName
             let totalVisits = entries.reduce(0) { $0 + max(1, $1.visitCount) }
             let dishes = Array(Set(entries.flatMap { $0.likedDishes.map(\.name) }))
+            let perFriendLiked = Set(dishes.map { $0.lowercased() })
+            let skipped = Array(Set(entries.flatMap { $0.dislikedDishes.map(\.name) }))
+                .filter { !perFriendLiked.contains($0.lowercased()) }
             let freshestDays: Int? = entries
                 .compactMap { $0.dateVisited }
                 .map { Calendar.current.dateComponents([.day], from: $0, to: now).day ?? 999 }
                 .min()
-            return FriendVisitSummary(name: name, visitCount: totalVisits, likedDishes: dishes, daysAgo: freshestDays)
+            return FriendVisitSummary(name: name, visitCount: totalVisits, likedDishes: dishes, skippedDishes: skipped, daysAgo: freshestDays)
         }.sorted { ($0.daysAgo ?? 999) < ($1.daysAgo ?? 999) }
 
         return BackupCardData(
@@ -1672,6 +1717,7 @@ struct FriendVisitSummary: Identifiable {
     let name: String               // "Pragya"
     let visitCount: Int
     let likedDishes: [String]      // dishes they liked
+    let skippedDishes: [String]    // dishes they thumbed-down (excludes any they also liked)
     let daysAgo: Int?              // days since their most recent visit
     var recencyLabel: String {
         guard let d = daysAgo else { return "" }
