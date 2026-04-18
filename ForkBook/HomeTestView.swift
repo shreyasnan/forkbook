@@ -591,12 +591,12 @@ struct HomeTestView: View {
                 }
             }
 
-            // Trust line stays in the warm-gold family but at lower
-            // opacity so the dish headline owns the full-strength gold.
-            // Same relationship applied on backup cards below.
+            // Trust line drops to muted off-white so gold is fully
+            // reserved for the dish headline (the thing to order).
+            // Same treatment applied on backup cards below.
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Self.warmAccent.opacity(0.7))
+                .foregroundStyle(Color(hex: "B0B0B4"))
 
             if showChanged, let changed = hero.changedConfidence {
                 HStack(spacing: 6) {
@@ -700,10 +700,10 @@ struct HomeTestView: View {
             // Prefer a specific name-led reason ("Puneet's been 3×") when
             // friend-summary data supports one — gives the tail variety
             // vs every card reading "Picked by X from your table".
-            // Softened gold so the dish headline stays the loud one.
+            // Muted white so the dish headline owns the gold.
             Text(backup.namedReason ?? backup.trustLine)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Self.warmAccent.opacity(0.7))
+                .foregroundStyle(Color(hex: "B0B0B4"))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
