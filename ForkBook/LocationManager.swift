@@ -10,8 +10,16 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     @Published var userLocation: CLLocation?
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    /// Resolved city from reverse-geocoding `userLocation`. Nil until the
+    /// first geocode succeeds (or if reverse-geocoding fails / is throttled).
+    /// Used by the Home header anchor line.
+    @Published var userCity: String?
 
     private let manager = CLLocationManager()
+    private let geocoder = CLGeocoder()
+    /// Last coordinate we kicked off a reverse-geocode for, so we don't
+    /// re-geocode on every tiny location update.
+    private var lastGeocodedLocation: CLLocation?
 
     override init() {
         super.init()
@@ -36,6 +44,24 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         userLocation = locations.last
+        if let loc = locations.last { resolveCityIfNeeded(loc) }
+    }
+
+    /// Reverse-geocode to a city name. Skips if we've already geocoded a
+    /// nearby point (<500m) — the city rarely changes within that radius
+    /// and CLGeocoder is rate-limited.
+    private func resolveCityIfNeeded(_ location: CLLocation) {
+        if let last = lastGeocodedLocation,
+           location.distance(from: last) < 500 {
+            return
+        }
+        lastGeocodedLocation = location
+        geocoder.reverseGeocodeLocation(location) { [weak self] placemarks, error in
+            guard let self else { return }
+            if let city = placemarks?.first?.locality, !city.isEmpty {
+                DispatchQueue.main.async { self.userCity = city }
+            }
+        }
     }
 
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {

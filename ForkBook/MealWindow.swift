@@ -39,6 +39,26 @@ enum MealWindow {
         }
     }
 
+    /// Uppercase "FRIDAY · 7:14 PM · BROOKLYN" line shown above the big
+    /// "Tonight" header. Grounds the home surface in time + place so picks
+    /// read as "right now, right here" rather than generic browsing.
+    /// Drops the city segment when `city` is nil / empty.
+    static func anchorLine(city: String?) -> String {
+        let now = DebugClock.now
+        let weekdayFmt = DateFormatter()
+        weekdayFmt.dateFormat = "EEEE"
+        let weekday = weekdayFmt.string(from: now).uppercased()
+
+        let timeFmt = DateFormatter()
+        timeFmt.dateFormat = "h:mm a"
+        // Force uppercase AM/PM (locale can return lowercase in some regions)
+        let time = timeFmt.string(from: now).uppercased()
+
+        var parts = [weekday, time]
+        if let city, !city.isEmpty { parts.append(city.uppercased()) }
+        return parts.joined(separator: " \u{00B7} ")
+    }
+
     /// Current window based on DebugClock.now (which respects the in-app
     /// time shifter; equals real `Date()` when offset is zero).
     static var current: MealWindow {

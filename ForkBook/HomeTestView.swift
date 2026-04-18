@@ -190,10 +190,19 @@ struct HomeTestView: View {
 
     private var homeHeader: some View {
         HStack(alignment: .top) {
-            Text(MealWindow.current.headerLabel)
-                .font(.system(size: 26, weight: .heavy))
-                .tracking(-0.5)
-                .foregroundColor(Color.fbText)
+            VStack(alignment: .leading, spacing: 4) {
+                // Time-place anchor: "FRIDAY · 7:14 PM · BROOKLYN".
+                // Grounds the page in right-now, right-here so picks
+                // read as a decision surface, not a browsing feed.
+                Text(MealWindow.anchorLine(city: locationManager.userCity))
+                    .font(.system(size: 11, weight: .bold))
+                    .tracking(1.4)
+                    .foregroundStyle(Self.mutedGray)
+                Text(MealWindow.current.headerLabel)
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.5)
+                    .foregroundColor(Color.fbText)
+            }
             Spacer()
             Button { showProfile = true } label: {
                 Image(systemName: "line.3.horizontal")
