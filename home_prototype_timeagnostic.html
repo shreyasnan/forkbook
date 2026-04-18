@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — Home (time-agnostic, palette-correct)</title>
+<style>
+  :root {
+    /* Pulled from ForkBook/Theme.swift */
+    --fb-bg:        #000000;
+    --fb-surface:   #121214;
+    --fb-surface2:  #1A1A1D;
+    --fb-border:    #26262A;
+    --fb-text:      #FFFFFF;
+    --fb-textlight: #D6D6DA;
+    --fb-muted:     #8E8E93;
+    --fb-muted2:    #6B6B70;
+    --fb-accent:    #FF7A45;   /* orange — system / recommendation voice */
+    --fb-warm:      #C4A882;   /* sand — people / trust signals */
+    --fb-commit:    #E8C87A;   /* amber — planned (unused here) */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; background: #0a0a0a; color: var(--fb-text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+
+  .stage {
+    display: flex; gap: 28px; justify-content: center; align-items: flex-start;
+    padding: 36px 20px 60px; flex-wrap: wrap;
+  }
+
+  .col { display: flex; flex-direction: column; align-items: center; }
+
+  .phone {
+    width: 390px; height: 844px;
+    background: var(--fb-bg);
+    border-radius: 36px;
+    border: 1px solid #1c1c1f;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    display: flex; flex-direction: column;
+  }
+
+  .phone-label {
+    margin-bottom: 8px;
+    font-size: 11px; color: #888; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+
+  .scroll {
+    flex: 1; overflow-y: auto;
+    padding-bottom: 20px;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* header — restrained */
+  header {
+    padding: 18px 20px 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  header .titles h1 {
+    font-size: 26px; margin: 0; font-weight: 800; letter-spacing: -0.5px;
+    color: var(--fb-text);
+  }
+  header .titles .sub {
+    font-size: 13px; color: var(--fb-muted); font-weight: 500; margin-top: 4px;
+  }
+  header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--fb-surface2);
+    border: 1px solid rgba(196,168,130,0.30);     /* sand ring — people */
+    display: flex; align-items: center; justify-content: center;
+    color: var(--fb-warm); font-size: 12px; font-weight: 700;
+  }
+
+  /* chip row */
+  .chips {
+    display: flex; gap: 8px;
+    padding: 18px 20px 0;
+    overflow-x: auto; scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto;
+    padding: 9px 14px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid rgba(255,255,255,0.06);
+    color: var(--fb-muted);
+    font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .chip.active {
+    background: rgba(255,122,69,0.10);
+    border-color: rgba(255,122,69,0.38);
+    color: var(--fb-accent);
+    font-weight: 700;
+  }
+
+  /* hero card */
+  .hero {
+    margin: 18px 16px 0;
+    padding: 22px;
+    border-radius: 24px;
+    background: linear-gradient(180deg, #18181b 0%, #131316 100%);
+    border: 1px solid rgba(255,255,255,0.05);
+    box-shadow: 0 16px 32px rgba(0,0,0,0.42);
+  }
+  .eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.4px;
+    color: var(--fb-muted); margin-bottom: 10px;
+  }
+  .restaurant {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.6px;
+    color: var(--fb-text); margin-bottom: 3px;
+  }
+  .meta {
+    font-size: 13px; font-weight: 500; color: var(--fb-muted2); margin-bottom: 22px;
+  }
+  .directive {
+    font-size: 21px; font-weight: 800; letter-spacing: -0.3px;
+    color: var(--fb-text); margin-bottom: 10px; line-height: 1.28;
+  }
+  .supporting {
+    font-size: 14px; font-weight: 500; color: var(--fb-textlight);
+    opacity: 0.65;
+    margin-bottom: 18px;
+  }
+  /* SAND — people */
+  .social-proof {
+    font-size: 13px; font-weight: 600; color: var(--fb-warm);
+    margin-bottom: 4px;
+  }
+  .trust-line {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted);
+    margin-bottom: 18px;
+  }
+  /* ORANGE — system claim, used sparingly (one line) */
+  .changed {
+    display: flex; align-items: center; gap: 7px;
+    font-size: 12px; color: var(--fb-muted);
+    margin-bottom: 22px;
+  }
+  .changed .dot {
+    width: 6px; height: 6px; border-radius: 50%; background: var(--fb-accent);
+  }
+  .cta-row { display: flex; justify-content: flex-end; }
+  .cta {
+    padding: 11px 22px;
+    border-radius: 999px;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    color: var(--fb-text);
+    font-size: 14px; font-weight: 700;
+    cursor: pointer;
+  }
+
+  /* section header */
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    color: var(--fb-muted);
+    padding: 28px 22px 12px;
+  }
+
+  /* backups */
+  .backups { padding: 0 16px; display: flex; flex-direction: column; gap: 10px; }
+  .backup {
+    padding: 14px 16px;
+    background: var(--fb-surface);
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.04);
+  }
+  .backup .row1 {
+    display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 4px;
+  }
+  .backup .name {
+    font-size: 16px; font-weight: 700; color: var(--fb-text);
+  }
+  .backup .meta-r { font-size: 12px; font-weight: 500; color: var(--fb-muted2); }
+  /* SAND — backup reasons are people-shaped */
+  .backup .reason {
+    font-size: 14px; font-weight: 600; color: var(--fb-warm); margin-bottom: 5px;
+  }
+  .backup .trust {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted);
+  }
+
+  /* tab bar */
+  .tabbar {
+    height: 64px;
+    border-top: 1px solid #1c1c1f;
+    display: flex; align-items: center; justify-content: space-around;
+    background: rgba(0,0,0,0.92);
+  }
+  .tabitem {
+    font-size: 11px; color: var(--fb-muted2); font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .tabitem.active { color: var(--fb-text); }
+  .tabicon { width: 18px; height: 18px; border-radius: 4px; background: currentColor; opacity: 0.8; }
+
+  .vnote {
+    width: 390px; margin-top: 10px;
+    color: #888; font-size: 12px; line-height: 1.5;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+
+    <!-- =========================================================== -->
+    <!-- PHONE 1: Date night chip ACTIVE                              -->
+    <!-- =========================================================== -->
+    <div class="col">
+      <div class="phone-label">Date night active</div>
+      <div class="phone">
+        <div class="scroll">
+          <header>
+            <div class="titles">
+              <h1>Where to eat</h1>
+              <div class="sub">Picks from people whose taste you trust</div>
+            </div>
+            <div class="avatar">S</div>
+          </header>
+
+          <div class="chips">
+            <div class="chip active">Date night</div>
+            <div class="chip">Quick bite</div>
+            <div class="chip">Kid friendly</div>
+            <div class="chip">Group dinner</div>
+            <div class="chip">Treat yourself</div>
+          </div>
+
+          <div class="hero">
+            <div class="eyebrow">YOUR TABLE&rsquo;S DATE-NIGHT CALL</div>
+            <div class="restaurant">Ju-Ni</div>
+            <div class="meta">Japanese &middot; Hayes Valley</div>
+
+            <div class="directive">Hamachi &mdash; the dish Priya orders every visit.</div>
+            <div class="supporting">Toro &middot; Uni &middot; Otoro nigiri</div>
+
+            <div class="social-proof">3 from your table chose this for date night</div>
+            <div class="trust-line">Priya, James + 1 other</div>
+
+            <div class="changed">
+              <span class="dot"></span>
+              Strongest date-night signal on your table
+            </div>
+
+            <div class="cta-row">
+              <div class="cta">Go here &rarr;</div>
+            </div>
+          </div>
+
+          <div class="section-label">ALSO GOOD FOR DATE NIGHT</div>
+          <div class="backups">
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Cotogna</div>
+                <div class="meta-r">Italian</div>
+              </div>
+              <div class="reason">Priya&rsquo;s #2 date-night pick. Quieter room.</div>
+              <div class="trust">Priya, Maya &middot; 2 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Flour + Water</div>
+                <div class="meta-r">Italian</div>
+              </div>
+              <div class="reason">If Japanese isn&rsquo;t it &mdash; James brings dates here for the pasta.</div>
+              <div class="trust">James &middot; 3 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Anchovy Bar</div>
+                <div class="meta-r">Seafood</div>
+              </div>
+              <div class="reason">Maya went Tuesday. Still thinking about the branzino.</div>
+              <div class="trust">Maya &middot; first visit</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Nopa</div>
+                <div class="meta-r">Californian</div>
+              </div>
+              <div class="reason">James has brought dates here four times. He knows.</div>
+              <div class="trust">James &middot; 4 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Rich Table</div>
+                <div class="meta-r">Californian</div>
+              </div>
+              <div class="reason">You&rsquo;ve already validated this one. Still holds for date night.</div>
+              <div class="trust">Your visits &middot; 5 over the years</div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem active"><div class="tabicon"></div>Home</div>
+          <div class="tabitem"><div class="tabicon"></div>Table</div>
+          <div class="tabitem"><div class="tabicon"></div>My Places</div>
+          <div class="tabitem"><div class="tabicon"></div>Add</div>
+        </div>
+      </div>
+      <div class="vnote">
+        Sand for people, orange for system. One orange dot, not five.
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <!-- PHONE 2: No chip selected                                    -->
+    <!-- =========================================================== -->
+    <div class="col">
+      <div class="phone-label">No chip selected</div>
+      <div class="phone">
+        <div class="scroll">
+          <header>
+            <div class="titles">
+              <h1>Where to eat</h1>
+              <div class="sub">Picks from people whose taste you trust</div>
+            </div>
+            <div class="avatar">S</div>
+          </header>
+
+          <div class="chips">
+            <div class="chip">Date night</div>
+            <div class="chip">Quick bite</div>
+            <div class="chip">Kid friendly</div>
+            <div class="chip">Group dinner</div>
+            <div class="chip">Treat yourself</div>
+          </div>
+
+          <div class="hero">
+            <div class="eyebrow">YOUR TABLE&rsquo;S TOP PICK</div>
+            <div class="restaurant">Ju-Ni</div>
+            <div class="meta">Japanese &middot; Hayes Valley</div>
+
+            <div class="directive">Priya and James both go for the hamachi.</div>
+            <div class="supporting">Toro &middot; Uni &middot; Otoro nigiri</div>
+
+            <div class="social-proof">3 people from your table got this</div>
+            <div class="trust-line">Priya, James + 1 other</div>
+
+            <div class="changed">
+              <span class="dot"></span>
+              Moved up after Priya&rsquo;s visit
+            </div>
+
+            <div class="cta-row">
+              <div class="cta">Go here &rarr;</div>
+            </div>
+          </div>
+
+          <div class="section-label">OTHER STRONG OPTIONS</div>
+          <div class="backups">
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Cotogna</div>
+                <div class="meta-r">Italian</div>
+              </div>
+              <div class="reason">Priya&rsquo;s most repeated pick this season.</div>
+              <div class="trust">Priya, Maya &middot; 5 visits between them</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Flour + Water</div>
+                <div class="meta-r">Italian</div>
+              </div>
+              <div class="reason">If you want pasta &mdash; James orders the pappardelle.</div>
+              <div class="trust">James &middot; 3 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Anchovy Bar</div>
+                <div class="meta-r">Seafood</div>
+              </div>
+              <div class="reason">Maya went Tuesday. Still thinking about the branzino.</div>
+              <div class="trust">Maya &middot; first visit</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Nopa</div>
+                <div class="meta-r">Californian</div>
+              </div>
+              <div class="reason">James has been back four times. He knows.</div>
+              <div class="trust">James &middot; 4 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Rich Table</div>
+                <div class="meta-r">Californian</div>
+              </div>
+              <div class="reason">You&rsquo;ve already validated this one. Worth another round.</div>
+              <div class="trust">Your visits &middot; 5 over the years</div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem active"><div class="tabicon"></div>Home</div>
+          <div class="tabitem"><div class="tabicon"></div>Table</div>
+          <div class="tabitem"><div class="tabicon"></div>My Places</div>
+          <div class="tabitem"><div class="tabicon"></div>Add</div>
+        </div>
+      </div>
+      <div class="vnote">
+        No chip. Same restraint, no pink, no avatar gradient.
+      </div>
+    </div>
+
+    <!-- =========================================================== -->
+    <!-- PHONE 3: Quick bite chip ACTIVE                              -->
+    <!-- =========================================================== -->
+    <div class="col">
+      <div class="phone-label">Quick bite active</div>
+      <div class="phone">
+        <div class="scroll">
+          <header>
+            <div class="titles">
+              <h1>Where to eat</h1>
+              <div class="sub">Picks from people whose taste you trust</div>
+            </div>
+            <div class="avatar">S</div>
+          </header>
+
+          <div class="chips">
+            <div class="chip">Date night</div>
+            <div class="chip active">Quick bite</div>
+            <div class="chip">Kid friendly</div>
+            <div class="chip">Group dinner</div>
+            <div class="chip">Treat yourself</div>
+          </div>
+
+          <div class="hero">
+            <div class="eyebrow">YOUR TABLE&rsquo;S QUICK-BITE CALL</div>
+            <div class="restaurant">Marufuku Ramen</div>
+            <div class="meta">Japanese &middot; Japantown</div>
+
+            <div class="directive">Hakata tonkotsu &mdash; in and out in 25 minutes.</div>
+            <div class="supporting">Karaage &middot; Gyoza</div>
+
+            <div class="social-proof">4 from your table swear by this for a quick lunch</div>
+            <div class="trust-line">Priya, James, Maya + 1 other</div>
+
+            <div class="changed">
+              <span class="dot"></span>
+              Strongest quick-bite signal on your table
+            </div>
+
+            <div class="cta-row">
+              <div class="cta">Go here &rarr;</div>
+            </div>
+          </div>
+
+          <div class="section-label">ALSO GOOD FOR QUICK BITE</div>
+          <div class="backups">
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Souvla</div>
+                <div class="meta-r">Greek</div>
+              </div>
+              <div class="reason">Maya&rsquo;s default when she&rsquo;s in a hurry.</div>
+              <div class="trust">Maya &middot; 6 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Nopalito</div>
+                <div class="meta-r">Mexican</div>
+              </div>
+              <div class="reason">If ramen isn&rsquo;t it &mdash; tacos al pastor, every time.</div>
+              <div class="trust">James &middot; 2 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Rintaro Cafe</div>
+                <div class="meta-r">Japanese</div>
+              </div>
+              <div class="reason">Priya went Friday. Onigiri set is a steal.</div>
+              <div class="trust">Priya &middot; first visit</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Tartine Manufactory</div>
+                <div class="meta-r">Bakery</div>
+              </div>
+              <div class="reason">James grabs lunch here every other week.</div>
+              <div class="trust">James &middot; 8 visits</div>
+            </div>
+
+            <div class="backup">
+              <div class="row1">
+                <div class="name">Saigon Sandwich</div>
+                <div class="meta-r">Vietnamese</div>
+              </div>
+              <div class="reason">You&rsquo;ve already validated this one. Cash only, still worth it.</div>
+              <div class="trust">Your visits &middot; 7 over the years</div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem active"><div class="tabicon"></div>Home</div>
+          <div class="tabitem"><div class="tabicon"></div>Table</div>
+          <div class="tabitem"><div class="tabicon"></div>My Places</div>
+          <div class="tabitem"><div class="tabicon"></div>Add</div>
+        </div>
+      </div>
+      <div class="vnote">
+        Same palette discipline, occasion-shaped directive.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

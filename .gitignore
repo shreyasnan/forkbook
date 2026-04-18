@@ -1,0 +1,71 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+
+# FUSE mount artifacts (Cowork sandbox)
+.fuse_hidden*
+
+# Xcode
+## User-specific
+*.xcuserstate
+xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/xcuserdata/
+
+## Build products
+build/
+DerivedData/
+*.moved-aside
+*.hmap
+*.ipa
+*.dSYM.zip
+*.dSYM
+
+## Backups
+*.bak
+*.orig
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Packages/
+Package.pins
+
+# CocoaPods (not in use, but just in case)
+Pods/
+
+# Python (Scripts/)
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+
+# SQLite transaction files (ephemeral)
+*.db-journal
+*.db-wal
+*.db-shm
+
+# Node (functions/)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Firebase emulator/cache
+.firebase/
+firebase-debug.log
+firestore-debug.log
+ui-debug.log
+
+# Editor / OS
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Secrets (keep these explicitly excluded even if added by mistake)
+*.env
+.env.local

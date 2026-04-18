@@ -112,7 +112,11 @@ enum OccasionClassifier {
         "chef\u{2019}s counter", "chef's counter",
         "prix fixe", "prix-fixe", "course menu", "multi-course",
         "caviar", "foie gras", "uni ", "truffle",
-        "wine pairing", "sommelier"
+        "wine pairing", "sommelier",
+        // Broader date-night signals for vegetarian dishes
+        "ravioli", "risotto", "tiramisu", "cr\u{00E8}me br\u{00FB}l\u{00E9}e", "creme brulee",
+        "burrata", "tartare", "carpaccio", "panna cotta",
+        "cocktail", "sashimi", "nigiri", "tempura"
     ]
     private static let dateNightCuisineKeys: [String] = [
         "italian", "japanese", "french"
@@ -122,7 +126,12 @@ enum OccasionClassifier {
         "for the table", "family style", "family-style",
         "dim sum", "hot pot", "hotpot", "korean bbq", "kbbq", "shabu",
         "thali", "ayce", "all you can eat",
-        "feast", "banquet", "platter"
+        "feast", "banquet", "platter",
+        // Broader group-dinner signals
+        "dumpling", "naan", "biryani", "curry", "paneer",
+        "momo", "samosa", "chaat", "dosa", "idli",
+        "mapo tofu", "fried rice", "lo mein", "chow mein",
+        "spring roll", "egg roll", "wonton"
     ]
     private static let groupDinnerCuisineKeys: [String] = [
         "chinese", "korean", "indian", "mediterranean"
@@ -133,7 +142,11 @@ enum OccasionClassifier {
         "sandwich", "pho", "ramen", "poke", "pok\u{00E9}",
         " bao", "pizza slice", "by the slice",
         "rice bowl", "grain bowl", "wrap", "salad bowl",
-        "boba", "smoothie", "quesadilla"
+        "boba", "smoothie", "quesadilla",
+        // Broader quick-bite signals
+        "noodle", "udon", "soba", "miso", "onigiri",
+        "falafel", "hummus", "pizza", "toast",
+        "gyoza", "edamame", "roll"
     ]
     private static let quickBiteCuisineKeys: [String] = [
         "vietnamese", "mexican", "thai"
@@ -144,7 +157,11 @@ enum OccasionClassifier {
         "children's menu",
         "chicken tenders", "chicken strips",
         "mac and cheese", "mac & cheese",
-        "grilled cheese", "cheese pizza", "plain pasta"
+        "grilled cheese", "cheese pizza", "plain pasta",
+        // Broader kid-friendly signals (vegetarian)
+        "margherita", "pasta", "noodle", "fried rice",
+        "pancake", "french fries", "fries", "garlic bread",
+        "mozzarella stick", "quesadilla", "cheese"
     ]
     private static let kidFriendlyCuisineKeys: [String] = [
         "american", "italian", "mexican"

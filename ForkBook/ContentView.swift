@@ -3,8 +3,14 @@ import FirebaseAuth
 
 struct ContentView: View {
     @EnvironmentObject var store: RestaurantStore
-    @State private var showOnboarding = false
-    @State private var hasCheckedOnboarding = false
+    // Onboarding disabled for now — re-enable when ready to ship.
+    // @State private var showOnboarding = false
+    // @State private var hasCheckedOnboarding = false
+
+    // Tracks the currently selected tab. Exposed as a Binding to child views
+    // that need to programmatically switch tabs — e.g. Search routes the user
+    // back to Home after they log a meal.
+    @State private var selectedTab: Int = 0
 
     init() {
         // Instagram-style dark tab bar
@@ -30,54 +36,32 @@ struct ContentView: View {
     }
 
     var body: some View {
-        TabView {
+        TabView(selection: $selectedTab) {
             HomeTestView()
                 .tabItem {
                     Label("Home", systemImage: "house")
                 }
+                .tag(0)
 
-            SearchTestView()
+            SearchTestView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("Search", systemImage: "magnifyingglass")
                 }
+                .tag(1)
 
             MyPlacesTestView()
                 .tabItem {
                     Label("My Places", systemImage: "bookmark")
                 }
+                .tag(2)
 
             TableTestView()
                 .tabItem {
                     Label("Table", systemImage: "person.2")
                 }
+                .tag(3)
         }
         .tint(Color.fbText)
-        .fullScreenCover(isPresented: $showOnboarding) {
-            InviteOnboardingView(
-                onComplete: {
-                    showOnboarding = false
-                    Task {
-                        try? await FirestoreService.shared.saveTastePreferences(
-                            TastePreferences(onboardingCompleted: true)
-                        )
-                    }
-                }
-            )
-        }
-        .task {
-            guard !hasCheckedOnboarding else { return }
-            hasCheckedOnboarding = true
-
-            // Sync Firestore entries into local store (one-time import)
-            await store.importFromFirestore()
-
-            // DEBUG: Always show onboarding (revert before shipping)
-            showOnboarding = true
-            // let prefs = await FirestoreService.shared.getTastePreferences()
-            // if !prefs.onboardingCompleted {
-            //     showOnboarding = true
-            // }
-        }
     }
 }
 

@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ForkBook — Table tab (filled state)</title>
+<style>
+  :root {
+    --bg:         #000;
+    --card:       #131517;
+    --cardAlt:    #171A1D;
+    --text:       #F5F5F7;
+    --textSoft:   #D6D6DA;
+    --muted:      #8E8E93;
+    --dim:        #6B6B70;
+    --line:       rgba(255,255,255,0.05);
+    --lineSoft:   rgba(255,255,255,0.04);
+    --warm:       #C4A882;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin:0; padding:0;
+    background:#0A0A0A;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px 80px;
+  }
+
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--bg);
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #1e1e22;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  }
+
+  .status {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .scroll {
+    height: calc(100% - 44px - 84px);
+    overflow-y: auto;
+    padding: 8px 20px 28px;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+  .scroll { scrollbar-width: none; }
+
+  .tabbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 84px;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding-top: 10px;
+  }
+  .tabbar .t {
+    display:flex; flex-direction:column; align-items:center; gap:4px;
+    font-size:10px; color: var(--dim);
+  }
+  .tabbar .t.on { color: var(--text); }
+  .tabbar .dot {
+    width:22px; height:22px; border-radius:6px;
+    background: rgba(255,255,255,0.08);
+  }
+  .tabbar .on .dot { background: rgba(255,255,255,0.18); }
+
+  /* ============== HEADER ============== */
+  .head {
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding: 14px 2px 22px;
+  }
+  .head h1 {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+    margin: 0;
+  }
+  .head p {
+    font-size: 13px; color: var(--muted);
+    margin: 4px 0 0; font-weight: 500;
+  }
+  .invite {
+    display: inline-flex; align-items: center; gap: 2px;
+    font-size: 13px; font-weight: 700;
+    color: var(--warm);
+    background: rgba(196,168,130,0.12);
+    border: 1px solid rgba(196,168,130,0.25);
+    border-radius: 999px;
+    padding: 8px 14px;
+    cursor: pointer;
+    user-select: none;
+  }
+  .invite:hover { filter: brightness(1.05); }
+
+  /* ============== SECTION LABEL ============== */
+  .slabel {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 1.4px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin: 4px 0 12px;
+  }
+
+  /* ============== SECTION 1: YOUR PEOPLE ============== */
+  .section { margin-bottom: 28px; }
+
+  .person {
+    display: flex; gap: 14px;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px;
+    margin-bottom: 10px;
+  }
+  .person .avatar {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: rgba(196,168,130,0.14);
+    border: 1px solid rgba(196,168,130,0.35);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700;
+    color: var(--warm);
+    flex-shrink: 0;
+  }
+  .person .body {
+    flex: 1; min-width: 0;
+  }
+  .person .name {
+    font-size: 16px; font-weight: 700;
+    color: var(--text);
+    margin: 0 0 4px;
+  }
+  .person .taste {
+    font-size: 14px; font-weight: 500;
+    color: #B0B0B4;
+    margin: 0 0 8px;
+    line-height: 1.35;
+  }
+  .person .proof {
+    font-size: 12px; font-weight: 500;
+    color: rgba(196,168,130,0.88);
+    display: flex; align-items: center; gap: 6px;
+    flex-wrap: wrap;
+  }
+  .person .proof .sep { color: var(--dim); }
+  .person .proof .recent { color: var(--muted); }
+
+  /* ============== SECTION 2: WHO TO TRUST FOR WHAT ============== */
+  .trustcard {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+    padding: 6px 0;
+  }
+  .trow {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px 16px;
+    border-bottom: 0.5px solid var(--lineSoft);
+  }
+  .trow:last-child { border-bottom: none; }
+  .trow .cat {
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+  }
+  .trow .arrow {
+    font-size: 13px; font-weight: 500;
+    color: var(--dim);
+  }
+  .trow .person-name {
+    font-size: 14px; font-weight: 600;
+    color: var(--warm);
+  }
+
+  /* ============== SECTION 3: RECENT ============== */
+  .recent-list {
+    display: flex; flex-direction: column;
+  }
+  .rrow {
+    display: flex; align-items: flex-start; gap: 8px;
+    padding: 12px 12px;
+    border-bottom: 0.5px solid var(--lineSoft);
+    font-size: 14px;
+    line-height: 1.35;
+  }
+  .rrow:last-child { border-bottom: none; }
+  .rrow .line { flex: 1; min-width: 0; }
+  .rrow .who {
+    font-weight: 600; color: var(--text);
+  }
+  .rrow .verb {
+    font-weight: 500; color: var(--muted);
+  }
+  .rrow .place {
+    font-weight: 600; color: var(--warm);
+  }
+  .rrow .time {
+    font-size: 12px; font-weight: 500;
+    color: var(--dim);
+    flex-shrink: 0;
+    padding-top: 1px;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="phone">
+    <div class="status">
+      <span>9:41</span>
+      <span>•••</span>
+    </div>
+
+    <div class="scroll">
+
+      <!-- ============ HEADER ============ -->
+      <div class="head">
+        <div>
+          <h1>Table</h1>
+          <p>People whose taste you trust</p>
+        </div>
+        <div class="invite">+ Invite</div>
+      </div>
+
+      <!-- ============ SECTION 1: YOUR PEOPLE ============ -->
+      <div class="section">
+        <div class="slabel">Your people</div>
+
+        <div class="person">
+          <div class="avatar">P</div>
+          <div class="body">
+            <div class="name">Priya</div>
+            <div class="taste">Great for sushi and date-night spots</div>
+            <div class="proof">
+              <span>9 picks you liked</span>
+              <span class="sep">·</span>
+              <span class="recent">Last: Omakase at Ju-Ni</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="person">
+          <div class="avatar">R</div>
+          <div class="body">
+            <div class="name">Raj</div>
+            <div class="taste">Best for Indian and quick lunches</div>
+            <div class="proof">
+              <span>You agreed on 7 places</span>
+              <span class="sep">·</span>
+              <span class="recent">Last: Masala Dosa at Dosa Point</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="person">
+          <div class="avatar">M</div>
+          <div class="body">
+            <div class="name">Maya</div>
+            <div class="taste">Always finds new places</div>
+            <div class="proof">
+              <span>3 recent saves worth trying</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="person">
+          <div class="avatar">A</div>
+          <div class="body">
+            <div class="name">Ankit</div>
+            <div class="taste">Reliable for group dinners and wine bars</div>
+            <div class="proof">
+              <span>You've gone to 5 of his picks</span>
+              <span class="sep">·</span>
+              <span class="recent">Last: Cotogna for the group</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="person">
+          <div class="avatar">L</div>
+          <div class="body">
+            <div class="name">Lena</div>
+            <div class="taste">Pastry, natural wine, slow brunches</div>
+            <div class="proof">
+              <span>You loved 4 of her 6 picks</span>
+              <span class="sep">·</span>
+              <span class="recent">Last: Tartine Manufactory</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="person">
+          <div class="avatar">S</div>
+          <div class="body">
+            <div class="name">Sam</div>
+            <div class="taste">Ramen, tacos, late-night food</div>
+            <div class="proof">
+              <span>You agreed on 6 places</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ SECTION 2: WHO TO TRUST FOR WHAT ============ -->
+      <div class="section">
+        <div class="slabel">Who to trust for what</div>
+
+        <div class="trustcard">
+          <div class="trow">
+            <span class="cat">Sushi</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Priya</span>
+          </div>
+          <div class="trow">
+            <span class="cat">Indian</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Raj</span>
+          </div>
+          <div class="trow">
+            <span class="cat">New spots</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Maya</span>
+          </div>
+          <div class="trow">
+            <span class="cat">Group dinners</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Ankit</span>
+          </div>
+          <div class="trow">
+            <span class="cat">Date night</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Priya</span>
+          </div>
+          <div class="trow">
+            <span class="cat">Brunch</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Lena</span>
+          </div>
+          <div class="trow">
+            <span class="cat">Late night</span>
+            <span class="arrow">→</span>
+            <span class="person-name">Sam</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- ============ SECTION 3: RECENT FROM YOUR TABLE ============ -->
+      <div class="section">
+        <div class="slabel">Recent from your table</div>
+
+        <div class="recent-list">
+          <div class="rrow">
+            <div class="line">
+              <span class="who">Priya</span>
+              <span class="verb"> got the Omakase at </span>
+              <span class="place">Ju-Ni</span>
+            </div>
+            <div class="time">2d</div>
+          </div>
+
+          <div class="rrow">
+            <div class="line">
+              <span class="who">Maya</span>
+              <span class="verb"> saved </span>
+              <span class="place">Flour + Water</span>
+            </div>
+            <div class="time">3d</div>
+          </div>
+
+          <div class="rrow">
+            <div class="line">
+              <span class="who">Raj</span>
+              <span class="verb"> went back to </span>
+              <span class="place">Dosa Point</span>
+            </div>
+            <div class="time">5d</div>
+          </div>
+
+          <div class="rrow">
+            <div class="line">
+              <span class="who">Ankit</span>
+              <span class="verb"> booked a table at </span>
+              <span class="place">Cotogna</span>
+            </div>
+            <div class="time">1w</div>
+          </div>
+
+          <div class="rrow">
+            <div class="line">
+              <span class="who">Lena</span>
+              <span class="verb"> recommended the morning bun at </span>
+              <span class="place">Tartine Manufactory</span>
+            </div>
+            <div class="time">1w</div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- ============ TAB BAR ============ -->
+    <div class="tabbar">
+      <div class="t"><div class="dot"></div>Home</div>
+      <div class="t"><div class="dot"></div>Search</div>
+      <div class="t"><div class="dot"></div>My Places</div>
+      <div class="t on"><div class="dot"></div>Table</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

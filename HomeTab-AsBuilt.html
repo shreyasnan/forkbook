@@ -1,0 +1,326 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ForkBook — Home tab (as built in Xcode)</title>
+<style>
+  :root {
+    --bg:        #000;
+    --cardBg:    #131517;
+    --cardHero:  #171A1D;
+    --warm:      #C4A882;
+    --muted:     #8E8E93;
+    --dim:       #6B6B70;
+    --light:     #F5F5F7;
+    --soft:      #B0B0B4;
+    --line:      rgba(255,255,255,0.06);
+    --lineFaint: rgba(255,255,255,0.05);
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0A0A0A;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    color: var(--light);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .stage {
+    min-height: 100vh;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 40px 20px 80px;
+  }
+
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--bg);
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #1e1e22;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  }
+
+  .status {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 22px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+
+  .scroll {
+    height: calc(100% - 44px - 84px);
+    overflow-y: auto;
+    padding: 12px 0 80px;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+  .scroll { scrollbar-width: none; }
+
+  /* ============ HEADER ============ */
+  .head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    padding: 0 20px;
+  }
+  .head h1 {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    margin: 0;
+    color: var(--light);
+  }
+  .avatar-ring {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    border: 1.5px solid var(--warm);
+    padding: 2px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .avatar-inner {
+    width: 100%; height: 100%;
+    border-radius: 50%;
+    background: rgba(196,168,130,0.16);
+    color: var(--warm);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700;
+  }
+
+  /* ============ HERO CARD ============ */
+  .hero-wrap {
+    padding: 20px 16px 0;
+  }
+  .hero {
+    position: relative;
+    background: var(--cardHero);
+    border: 1px solid var(--line);
+    border-radius: 24px;
+    padding: 24px;
+    box-shadow: 0 16px 28px rgba(0,0,0,0.42);
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute;
+    top: 0; left: 0;
+    width: 240px; height: 240px;
+    background: radial-gradient(circle at top left, rgba(196,168,130,0.06), transparent 70%);
+    pointer-events: none;
+  }
+  .hero > * { position: relative; }
+
+  .hero .eyebrow {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    text-transform: uppercase;
+    color: var(--muted);
+    margin: 0 0 10px;
+  }
+  .hero .restaurant {
+    font-size: 26px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
+    color: var(--light);
+    margin: 0 0 3px;
+  }
+  .hero .meta {
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--dim);
+    margin: 0 0 20px;
+  }
+  .hero .directive {
+    font-size: 19px;
+    font-weight: 700;
+    color: var(--light);
+    margin: 0 0 22px;
+  }
+  .hero .heroDish {
+    font-size: 24px;
+    font-weight: 800;
+    letter-spacing: -0.3px;
+    color: var(--warm);
+    margin: 0 0 10px;
+  }
+  .hero .supporting {
+    margin: 0 0 16px;
+  }
+  .hero .supporting div {
+    font-size: 14px;
+    font-weight: 500;
+    color: var(--soft);
+    line-height: 1.35;
+  }
+  .hero .trust {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(196,168,130,0.8);
+    margin: 0 0 22px;
+  }
+  .hero .cta-row {
+    display: flex;
+    justify-content: flex-end;
+  }
+  .hero .cta {
+    font-size: 14px;
+    font-weight: 700;
+    color: var(--light);
+    padding: 11px 24px;
+    background: rgba(255,255,255,0.10);
+    border: 1px solid rgba(255,255,255,0.14);
+    border-radius: 999px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    white-space: nowrap;
+  }
+
+  /* ============ ALSO GREAT ============ */
+  .also-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 1.6px;
+    text-transform: uppercase;
+    color: var(--muted);
+    padding: 28px 22px 12px;
+  }
+  .backups {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0 16px;
+  }
+  .backup {
+    background: var(--cardBg);
+    border: 1px solid var(--lineFaint);
+    border-radius: 16px;
+    padding: 14px 18px;
+  }
+  .backup .r {
+    font-size: 16px;
+    font-weight: 700;
+    color: var(--light);
+    margin: 0 0 4px;
+  }
+  .backup .d {
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--warm);
+    margin: 0 0 5px;
+  }
+  .backup .t {
+    font-size: 12px;
+    font-weight: 500;
+    color: rgba(107,107,112,0.85);
+    margin: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* ============ TAB BAR ============ */
+  .tabbar {
+    position: absolute;
+    bottom: 0; left: 0; right: 0;
+    height: 84px;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    padding-top: 10px;
+  }
+  .tab {
+    display: flex; flex-direction: column; align-items: center; gap: 4px;
+    font-size: 10px; color: var(--dim);
+  }
+  .tab.on { color: var(--light); }
+  .tab .dot {
+    width: 22px; height: 22px; border-radius: 6px;
+    background: rgba(255,255,255,0.08);
+  }
+  .tab.on .dot { background: rgba(255,255,255,0.18); }
+</style>
+</head>
+<body>
+
+<div class="stage">
+  <div class="phone">
+    <div class="status">
+      <span>9:41</span>
+      <span>•••</span>
+    </div>
+
+    <div class="scroll">
+      <!-- HEADER -->
+      <div class="head">
+        <h1>Home</h1>
+        <div class="avatar-ring"><div class="avatar-inner">S</div></div>
+      </div>
+
+      <!-- HERO -->
+      <div class="hero-wrap">
+        <div class="hero">
+          <div class="eyebrow">YOUR TABLE'S PICK FOR TONIGHT</div>
+          <div class="restaurant">Ju-Ni</div>
+          <div class="meta">Japanese · 23 min · $$</div>
+          <div class="directive">Get the Omakase</div>
+          <div class="heroDish">Omakase</div>
+          <div class="supporting">
+            <div>Uni Toast</div>
+            <div>A5 Wagyu</div>
+          </div>
+          <div class="trust">Priya and Raj both get this</div>
+          <div class="cta-row">
+            <div class="cta">Go here →</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ALSO GREAT -->
+      <div class="also-label">ALSO GREAT</div>
+      <div class="backups">
+        <div class="backup">
+          <div class="r">Flour + Water</div>
+          <div class="d">Get the Pappardelle</div>
+          <div class="t">Raj + Maya recommend it</div>
+        </div>
+        <div class="backup">
+          <div class="r">Tartine</div>
+          <div class="d">Order the Morning Bun</div>
+          <div class="t">Priya was just here</div>
+        </div>
+        <div class="backup">
+          <div class="r">Dumpling Home</div>
+          <div class="d">Get the Soup Dumplings</div>
+          <div class="t">3 from your table get this</div>
+        </div>
+        <div class="backup">
+          <div class="r">Nopalito</div>
+          <div class="d">Go for the Carnitas</div>
+          <div class="t">Ankit keeps ordering this</div>
+        </div>
+        <div class="backup">
+          <div class="r">Sushi Zone</div>
+          <div class="d">Order the Chirashi</div>
+          <div class="t">Always solid</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- TAB BAR -->
+    <div class="tabbar">
+      <div class="tab on"><div class="dot"></div>Home</div>
+      <div class="tab"><div class="dot"></div>Search</div>
+      <div class="tab"><div class="dot"></div>My Places</div>
+      <div class="tab"><div class="dot"></div>Table</div>
+    </div>
+  </div>
+</div>
+
+</body>
+</html>

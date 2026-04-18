@@ -109,10 +109,7 @@ struct MyPlacesTestView: View {
     private var homeScreen: some View {
         ScrollView(.vertical, showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
-                headerBlock(
-                    title: "Your places",
-                    subtitle: "Your best places, ready when you need a recommendation"
-                )
+                headerBlock(title: "Your places")
 
                 searchBar
                     .padding(.horizontal, 16)
@@ -172,11 +169,11 @@ struct MyPlacesTestView: View {
             if store.visitedRestaurants.isEmpty {
                 Text("Search by name, dish, city, or cuisine")
             } else {
-                Text("Try: \u{201C}ramen\u{201D}, \u{201C}best in SF\u{201D}, or \u{201C}where should I take Maya\u{201D}")
+                Text("Try: \u{201C}ramen\u{201D} or \u{201C}best in SF\u{201D}")
             }
         }
-        .font(.system(size: 11, weight: .medium))
-        .foregroundStyle(Color(hex: "6B6B70"))
+        .font(.system(size: 13, weight: .medium))
+        .foregroundStyle(Color(hex: "8E8E93"))
         .padding(.horizontal, 18)
     }
 
@@ -196,7 +193,7 @@ struct MyPlacesTestView: View {
             Text("Nothing logged yet")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(Color.fbText)
-            Text("Add places you\u{2019}ve been and ForkBook will help you remember what you loved.")
+            Text("Add places you\u{2019}ve been.")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
@@ -975,23 +972,24 @@ struct MyPlacesTestView: View {
     // MARK: - Shared Header
     // =========================================================================
 
-    private func headerBlock(title: String, subtitle: String) -> some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 6) {
-                Text(title)
-                    .font(.system(size: 26, weight: .heavy))
-                    .tracking(-0.5)
-                    .foregroundStyle(Color.fbText)
+    private func headerBlock(title: String, subtitle: String? = nil) -> some View {
+        // Avatar/profile link removed — profile is reachable from the Home
+        // tab via AccountMenuView. Keeps this surface focused on place
+        // memory without a tappable identity affordance competing for
+        // attention with the search bar.
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+                .font(.system(size: 26, weight: .heavy))
+                .tracking(-0.5)
+                .foregroundStyle(Color.fbText)
 
+            if let subtitle, !subtitle.isEmpty {
                 Text(subtitle)
                     .font(.system(size: 13, weight: .medium))
                     .foregroundStyle(Color(hex: "8E8E93"))
             }
-
-            Spacer()
-
-            AvatarRing()
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.top, 12)
     }
@@ -1021,20 +1019,22 @@ struct MyPlacesTestView: View {
     // =========================================================================
 
     private var searchBar: some View {
+        // Sized to match the Search tab's search bar so the two feel like
+        // peers rather than one being a primary and the other an afterthought.
         HStack(spacing: 10) {
             Image(systemName: "magnifyingglass")
-                .font(.system(size: 14, weight: .medium))
+                .font(.system(size: 16))
                 .foregroundStyle(Color(hex: "8E8E93"))
 
             TextField(
                 "",
                 text: $query,
                 prompt: Text("Search your places or ask")
-                    .font(.system(size: 14, weight: .medium))
+                    .font(.body)
                     .foregroundColor(Color(hex: "B0B0B4"))
             )
             .focused($searchFocused)
-            .font(.system(size: 14, weight: .medium))
+            .font(.body)
             .foregroundStyle(Color.fbText)
             .textInputAutocapitalization(.never)
             .autocorrectionDisabled(true)
@@ -1046,14 +1046,13 @@ struct MyPlacesTestView: View {
                     query = ""
                 } label: {
                     Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.system(size: 16))
                         .foregroundStyle(Color(hex: "6B6B70"))
                 }
                 .buttonStyle(MyPlacesPressStyle())
             }
         }
-        .padding(.horizontal, 14)
-        .padding(.vertical, 13)
+        .padding(14)
         .background(
             RoundedRectangle(cornerRadius: 16, style: .continuous)
                 .fill(Color.white.opacity(0.04))
@@ -1764,21 +1763,6 @@ struct SuggestedQuery: Identifiable {
     let question: String
     let answerPreview: String
     let target: MyPlacesTestView.Route
-}
-
-// =========================================================================
-// MARK: - Avatar Ring (matches other tabs)
-// =========================================================================
-
-private struct AvatarRing: View {
-    var body: some View {
-        RingedAvatarView(
-            name: Auth.auth().currentUser?.displayName ?? "User",
-            size: 32,
-            photoData: ProfilePhotoStore.shared.load(),
-            showRing: true
-        )
-    }
 }
 
 // =========================================================================

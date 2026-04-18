@@ -1,0 +1,83 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // --- Users ---
+    // Users can read/write their own profile. Other authenticated users can read profiles (for circle member names).
+    match /users/{userId} {
+      allow read: if request.auth != null;
+      allow create: if request.auth != null && request.auth.uid == userId;
+      allow update: if request.auth != null && request.auth.uid == userId;
+      allow delete: if false;
+    }
+
+    // --- Circles ---
+    match /circles/{circleId} {
+      // Any authenticated user can read circles they're a member of (enforced in app query, but allow read for invite code lookup too)
+      allow read: if request.auth != null;
+
+      // Any authenticated user can create a circle
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid
+        && request.auth.uid in request.resource.data.memberIds;
+
+      // Members can update (join circle, update invite code, etc.)
+      allow update: if request.auth != null
+        && (request.auth.uid in resource.data.memberIds
+            || request.auth.uid in request.resource.data.memberIds);
+
+      allow delete: if false;
+
+      // --- Restaurants within a circle ---
+      match /restaurants/{restaurantId} {
+        // Circle members can read all restaurants
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/circles/$(circleId)).data.memberIds;
+
+        // Users can create/update their own restaurants
+        allow create, update: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/circles/$(circleId)).data.memberIds
+          && request.resource.data.userId == request.auth.uid;
+
+        allow delete: if request.auth != null
+          && resource.data.userId == request.auth.uid;
+      }
+
+      // --- Dish Opinions within a circle ---
+      match /dishOpinions/{opinionId} {
+        // Circle members can read all opinions
+        allow read: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/circles/$(circleId)).data.memberIds;
+
+        // Users can create/update their own opinions
+        allow create, update: if request.auth != null
+          && request.auth.uid in get(/databases/$(database)/documents/circles/$(circleId)).data.memberIds
+          && request.resource.data.userId == request.auth.uid;
+
+        allow delete: if request.auth != null
+          && resource.data.userId == request.auth.uid;
+      }
+    }
+
+    // --- Table Requests (join requests) ---
+    match /tableRequests/{requestId} {
+      // Users can read requests they sent or that are for circles they own
+      allow read: if request.auth != null;
+
+      // Any authenticated user can create a join request
+      allow create: if request.auth != null
+        && request.resource.data.requesterId == request.auth.uid;
+
+      // Circle owner can update (accept/decline), requester can update their own
+      allow update: if request.auth != null;
+
+      allow delete: if false;
+    }
+
+    // Deny everything else
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

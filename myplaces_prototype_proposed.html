@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — MyPlaces (proposed)</title>
+<style>
+  :root {
+    /* From ForkBook/Theme.swift */
+    --fb-bg:        #000000;
+    --fb-surface:   #121214;
+    --fb-surface2:  #1A1A1D;
+    --fb-border:    #26262A;
+    --fb-text:      #FFFFFF;
+    --fb-textlight: #D6D6DA;
+    --fb-muted:     #8E8E93;
+    --fb-muted2:    #6B6B70;
+    --fb-accent:    #FF7A45;   /* system / recommendation voice */
+    --fb-warm:      #C4A882;   /* sand — people / trust signals */
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    margin: 0; padding: 0; background: #0a0a0a; color: var(--fb-text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+  }
+
+  .stage {
+    display: flex; gap: 36px; justify-content: center; align-items: flex-start;
+    padding: 36px 20px 60px; flex-wrap: wrap;
+  }
+  .col { display: flex; flex-direction: column; align-items: center; }
+
+  .phone {
+    width: 390px; height: 844px;
+    background: var(--fb-bg);
+    border-radius: 36px;
+    border: 1px solid #1c1c1f;
+    overflow: hidden;
+    position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.55);
+    display: flex; flex-direction: column;
+  }
+  .phone-label {
+    margin-bottom: 8px;
+    font-size: 11px; color: #888; font-weight: 600;
+    letter-spacing: 1px; text-transform: uppercase;
+  }
+  .scroll {
+    flex: 1; overflow-y: auto;
+    padding-bottom: 24px;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* Header */
+  header {
+    padding: 18px 20px 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+  }
+  header .titles h1 {
+    font-size: 26px; margin: 0; font-weight: 800; letter-spacing: -0.5px;
+    color: var(--fb-text);
+  }
+  header .titles .sub {
+    font-size: 13px; color: var(--fb-muted); font-weight: 500; margin-top: 4px;
+  }
+  header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--fb-surface2);
+    border: 1px solid rgba(196,168,130,0.30);
+    color: var(--fb-warm); font-size: 12px; font-weight: 700;
+    display: flex; align-items: center; justify-content: center;
+  }
+
+  /* Search — secondary, not loud */
+  .search {
+    margin: 16px 16px 0;
+    display: flex; align-items: center; gap: 10px;
+    padding: 11px 14px;
+    background: rgba(255,255,255,0.03);
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+  }
+  .search .icon { color: var(--fb-muted2); font-size: 13px; }
+  .search .placeholder { color: var(--fb-muted); font-size: 13px; font-weight: 500; }
+
+  /* Section labels */
+  .section-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.5px;
+    color: var(--fb-muted);
+    padding: 26px 22px 10px;
+    display: flex; justify-content: space-between; align-items: baseline;
+  }
+  .section-label .more { color: var(--fb-muted2); font-size: 11px; font-weight: 600; }
+
+  /* Your most-loved — horizontal feature row */
+  .loved-strip {
+    display: flex; gap: 12px;
+    padding: 0 16px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .loved-strip::-webkit-scrollbar { display: none; }
+  .loved-card {
+    flex: 0 0 220px;
+    padding: 16px;
+    border-radius: 18px;
+    background: linear-gradient(180deg, #18181b 0%, #131316 100%);
+    border: 1px solid rgba(255,255,255,0.05);
+    box-shadow: 0 8px 18px rgba(0,0,0,0.32);
+    display: flex; flex-direction: column;
+  }
+  .loved-card .badge {
+    font-size: 10px; font-weight: 700; letter-spacing: 1.2px;
+    color: var(--fb-warm);
+    margin-bottom: 8px;
+  }
+  .loved-card .name {
+    font-size: 17px; font-weight: 800; color: var(--fb-text);
+    letter-spacing: -0.3px;
+  }
+  .loved-card .meta {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted2);
+    margin-top: 2px;
+    margin-bottom: 14px;
+  }
+  .loved-card .stat {
+    font-size: 13px; font-weight: 600; color: var(--fb-textlight);
+    margin-bottom: 4px;
+  }
+  .loved-card .dish {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted);
+    line-height: 1.35;
+  }
+
+  /* By city — clean rows, count badge */
+  .city-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
+  .city-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 16px;
+    background: var(--fb-surface);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 14px;
+  }
+  .city-row .left { display: flex; flex-direction: column; }
+  .city-row .city-name {
+    font-size: 15px; font-weight: 700; color: var(--fb-text);
+  }
+  .city-row .city-sub {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted);
+    margin-top: 2px;
+  }
+  .city-row .count {
+    font-size: 13px; font-weight: 700; color: var(--fb-warm);
+  }
+  .city-row .arrow {
+    color: var(--fb-muted2); font-size: 14px; margin-left: 12px;
+  }
+
+  /* Recently logged */
+  .recent-list { padding: 0 16px; display: flex; flex-direction: column; gap: 8px; }
+  .recent-row {
+    display: flex; align-items: baseline; justify-content: space-between;
+    padding: 12px 16px;
+    background: var(--fb-surface);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 14px;
+  }
+  .recent-row .name {
+    font-size: 15px; font-weight: 700; color: var(--fb-text);
+  }
+  .recent-row .meta {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted);
+    margin-top: 2px;
+  }
+  .recent-row .right {
+    font-size: 12px; font-weight: 500; color: var(--fb-muted2);
+  }
+
+  /* Tab bar */
+  .tabbar {
+    height: 64px;
+    border-top: 1px solid #1c1c1f;
+    display: flex; align-items: center; justify-content: space-around;
+    background: rgba(0,0,0,0.92);
+  }
+  .tabitem {
+    font-size: 11px; color: var(--fb-muted2); font-weight: 600;
+    display: flex; flex-direction: column; align-items: center; gap: 3px;
+  }
+  .tabitem.active { color: var(--fb-text); }
+  .tabicon { width: 18px; height: 18px; border-radius: 4px; background: currentColor; opacity: 0.8; }
+
+  /* Notes column */
+  .notes-col {
+    width: 360px; display: flex; flex-direction: column; gap: 18px;
+    color: #ccc; font-size: 13px; line-height: 1.5;
+  }
+  .notes-col h2 {
+    color: #fff; font-size: 14px; font-weight: 700; margin: 0 0 6px;
+    letter-spacing: 0.4px;
+  }
+  .notes-col .note {
+    padding: 14px 16px;
+    background: #131316;
+    border: 1px solid #1c1c1f;
+    border-radius: 12px;
+  }
+  .notes-col .strike {
+    text-decoration: line-through;
+    color: #777;
+  }
+</style>
+</head>
+<body>
+  <div class="stage">
+
+    <!-- ====================================================== -->
+    <!-- PROPOSED MyPlaces                                       -->
+    <!-- ====================================================== -->
+    <div class="col">
+      <div class="phone-label">Proposed</div>
+      <div class="phone">
+        <div class="scroll">
+          <header>
+            <div class="titles">
+              <h1>Your places</h1>
+              <div class="sub">Everywhere you&rsquo;ve been worth remembering</div>
+            </div>
+            <div class="avatar">S</div>
+          </header>
+
+          <div class="search">
+            <span class="icon">&#x1F50D;</span>
+            <span class="placeholder">Search places, dishes, cities</span>
+          </div>
+
+          <!-- Most-loved: signal-led, horizontal -->
+          <div class="section-label">
+            <span>YOUR MOST-LOVED</span>
+            <span class="more">See all</span>
+          </div>
+          <div class="loved-strip">
+            <div class="loved-card">
+              <div class="badge">YOUR GO-TO</div>
+              <div class="name">Rich Table</div>
+              <div class="meta">Californian &middot; Hayes Valley</div>
+              <div class="stat">5 visits over the years</div>
+              <div class="dish">Sardine chips, porcini doughnuts</div>
+            </div>
+            <div class="loved-card">
+              <div class="badge">YOU LOVED IT</div>
+              <div class="name">Ju-Ni</div>
+              <div class="meta">Japanese &middot; Hayes Valley</div>
+              <div class="stat">2 visits, both 5&#9733;</div>
+              <div class="dish">Hamachi, otoro nigiri</div>
+            </div>
+            <div class="loved-card">
+              <div class="badge">REPEAT FAVORITE</div>
+              <div class="name">Cotogna</div>
+              <div class="meta">Italian &middot; Jackson Square</div>
+              <div class="stat">4 visits, last in March</div>
+              <div class="dish">Tagliatelle, wood-fired pizza</div>
+            </div>
+          </div>
+
+          <!-- By city: stateful filter, clear count -->
+          <div class="section-label">
+            <span>BY CITY</span>
+          </div>
+          <div class="city-list">
+            <div class="city-row">
+              <div class="left">
+                <div class="city-name">San Francisco</div>
+                <div class="city-sub">Italian, Japanese, Californian</div>
+              </div>
+              <div style="display:flex; align-items:center;">
+                <div class="count">28</div>
+                <div class="arrow">&rsaquo;</div>
+              </div>
+            </div>
+            <div class="city-row">
+              <div class="left">
+                <div class="city-name">Oakland</div>
+                <div class="city-sub">Mexican, Vietnamese</div>
+              </div>
+              <div style="display:flex; align-items:center;">
+                <div class="count">7</div>
+                <div class="arrow">&rsaquo;</div>
+              </div>
+            </div>
+            <div class="city-row">
+              <div class="left">
+                <div class="city-name">New York</div>
+                <div class="city-sub">Korean, French</div>
+              </div>
+              <div style="display:flex; align-items:center;">
+                <div class="count">5</div>
+                <div class="arrow">&rsaquo;</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Recently logged -->
+          <div class="section-label">
+            <span>RECENTLY LOGGED</span>
+          </div>
+          <div class="recent-list">
+            <div class="recent-row">
+              <div>
+                <div class="name">Anchovy Bar</div>
+                <div class="meta">Seafood &middot; SF</div>
+              </div>
+              <div class="right">3 days ago</div>
+            </div>
+            <div class="recent-row">
+              <div>
+                <div class="name">Souvla</div>
+                <div class="meta">Greek &middot; SF</div>
+              </div>
+              <div class="right">last week</div>
+            </div>
+            <div class="recent-row">
+              <div>
+                <div class="name">Marufuku Ramen</div>
+                <div class="meta">Japanese &middot; SF</div>
+              </div>
+              <div class="right">2 weeks ago</div>
+            </div>
+          </div>
+        </div>
+        <div class="tabbar">
+          <div class="tabitem"><div class="tabicon"></div>Home</div>
+          <div class="tabitem"><div class="tabicon"></div>Table</div>
+          <div class="tabitem active"><div class="tabicon"></div>My Places</div>
+          <div class="tabitem"><div class="tabicon"></div>Add</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ====================================================== -->
+    <!-- WHAT CHANGED — annotation column                        -->
+    <!-- ====================================================== -->
+    <div class="notes-col">
+      <h2>What changed</h2>
+
+      <div class="note">
+        <strong>Header rewrite.</strong><br/>
+        <span class="strike">My Places &middot; Ask from memory</span><br/>
+        Your places &middot; Everywhere you&rsquo;ve been worth remembering
+      </div>
+
+      <div class="note">
+        <strong>Search demoted.</strong><br/>
+        Smaller pill, lighter background, sits below header. Placeholder
+        is plain (&ldquo;Search places, dishes, cities&rdquo;) — no longer
+        framed as &ldquo;ask&rdquo; / chatbot voice.
+      </div>
+
+      <div class="note">
+        <strong>Lying chip row removed.</strong><br/>
+        The first-chip-always-active styling was misleading. Replaced
+        with three clearly differentiated sections instead of three
+        surfaces that do the same job.
+      </div>
+
+      <div class="note">
+        <strong>New: &ldquo;Your most-loved&rdquo;.</strong><br/>
+        Horizontal strip of 2&ndash;3 cards. Source from existing signals:
+        <code>userIsGoTo</code>, <code>userLoved</code>, repeat
+        <code>visitCount</code>. Sand badge tells you why this card
+        is here. Answers &ldquo;which places matter to me?&rdquo; before
+        you have to scroll.
+      </div>
+
+      <div class="note">
+        <strong>By city: count + cuisine sub.</strong><br/>
+        Replaces &ldquo;Best in SF?&rdquo; query cards. Same destination,
+        clearer affordance &mdash; you see the count, you see what kind
+        of food lives there, you tap to drill in.
+      </div>
+
+      <div class="note">
+        <strong>Recently logged.</strong><br/>
+        Replaces &ldquo;Quick access&rdquo;. Same data, more honest label.
+        If a user just added a place, this is where they verify it
+        landed.
+      </div>
+
+      <div class="note">
+        <strong>Color discipline.</strong><br/>
+        Sand for people-shaped signals (badges, city counts), text
+        white/muted otherwise. No orange on this page &mdash; orange is
+        the recommendation voice and lives on Home.
+      </div>
+
+      <div class="note">
+        <strong>What I dropped.</strong><br/>
+        &ldquo;You might ask&rdquo; suggested-queries section. The
+        functionality still exists via search &mdash; typing &ldquo;best in&rdquo;
+        triggers the same intent &mdash; but it stops being a separate
+        surface competing for attention.
+      </div>
+    </div>
+
+  </div>
+</body>
+</html>

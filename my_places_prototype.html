@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — My Places</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #121214;
+    --surface2: #1a1a1d;
+    --border: #26262a;
+    --text: #fff;
+    --muted: #8e8e93;
+    --muted2: #6b6b70;
+    --accent1: #ff7a45;
+    --accent2: #ff2d87;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+
+  .phone {
+    max-width: 400px; margin: 24px auto;
+    background: var(--bg); border-radius: 36px;
+    border: 1px solid #222; overflow: hidden;
+    min-height: 820px; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  header {
+    padding: 18px 20px 4px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 26px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+
+  /* Filters */
+  .filters {
+    display: flex; gap: 8px; padding: 14px 20px 8px; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .filters::-webkit-scrollbar { display: none; }
+  .filter {
+    flex: 0 0 auto; padding: 8px 14px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .filter.active {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #fff; border-color: transparent;
+  }
+
+  /* Stats row */
+  .stats {
+    display: flex; gap: 0; padding: 14px 20px 8px;
+  }
+  .stat {
+    flex: 1; text-align: center;
+    padding: 12px 0; border-right: 1px solid var(--border);
+  }
+  .stat:last-child { border-right: none; }
+  .stat .num { font-size: 22px; font-weight: 800; }
+  .stat .label { font-size: 11px; color: var(--muted); margin-top: 2px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .eyebrow {
+    padding: 20px 20px 10px 22px;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  /* Place cards */
+  .place-list { padding: 0 16px; }
+  .place-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    margin-bottom: 10px;
+    cursor: pointer;
+  }
+  .place-top {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    margin-bottom: 6px;
+  }
+  .place-name { font-size: 17px; font-weight: 700; }
+  .place-reaction { font-size: 18px; }
+  .place-meta { font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .place-dish-row {
+    display: flex; align-items: center; gap: 6px;
+    margin-bottom: 4px;
+  }
+  .place-dish {
+    font-size: 13px; font-weight: 600;
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .place-note {
+    font-size: 12px; color: var(--muted); font-style: italic;
+  }
+  .place-footer {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 8px; padding-top: 8px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+  }
+  .place-date { font-size: 11px; color: var(--muted2); }
+  .place-table-signal {
+    font-size: 11px; color: var(--accent1); font-weight: 600;
+  }
+
+  /* Saved / Want to try section */
+  .saved-row {
+    display: flex; gap: 10px; padding: 0 16px 16px; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .saved-row::-webkit-scrollbar { display: none; }
+  .saved-card {
+    flex: 0 0 65%;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 14px;
+    cursor: pointer;
+  }
+  .saved-place { font-size: 15px; font-weight: 700; margin-bottom: 2px; }
+  .saved-dish {
+    font-size: 12px; font-weight: 600;
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 2px;
+  }
+  .saved-meta { font-size: 11px; color: var(--muted2); }
+  .saved-source { font-size: 11px; color: var(--accent1); margin-top: 4px; font-weight: 600; }
+
+  /* Tab bar */
+  .tabbar {
+    position: sticky; bottom: 0;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around; padding: 10px 0 14px;
+  }
+  .tab { color: var(--muted); font-size: 11px; text-align: center; }
+  .tab.active { color: #fff; }
+  .tab .ic { font-size: 20px; display: block; }
+
+  /* Detail sheet */
+  .sheet-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: flex-end; justify-content: center; z-index: 50;
+  }
+  .sheet-back.show { display: flex; }
+  .sheet {
+    width: 100%; max-width: 400px;
+    background: #131316;
+    border-radius: 24px 24px 0 0;
+    padding: 14px 20px 28px;
+    max-height: 82vh; overflow-y: auto;
+  }
+  .sheet .grab { width: 36px; height: 4px; background: #3a3a3f; border-radius: 2px; margin: 0 auto 18px; }
+  .sheet h2 { margin: 0 0 2px; font-size: 22px; font-weight: 800; }
+  .sheet .s-cuisine { color: var(--muted); font-size: 13px; margin-bottom: 16px; }
+
+  .sheet .section-head {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin: 0 0 10px; font-weight: 700;
+  }
+  .your-visit {
+    background: rgba(255,255,255,0.03); border: 1px solid var(--border);
+    border-radius: 14px; padding: 14px; margin-bottom: 16px;
+  }
+  .your-visit .v-row { font-size: 14px; margin-bottom: 6px; display: flex; align-items: center; gap: 8px; }
+  .your-visit .v-row:last-child { margin-bottom: 0; }
+  .your-visit .v-label { color: var(--muted); font-size: 12px; min-width: 60px; }
+  .your-visit .v-val { color: #e6e6ea; font-weight: 600; }
+  .your-visit .v-dish {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 700;
+  }
+
+  .table-section { margin-bottom: 16px; }
+  .t-row {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    font-size: 13px;
+  }
+  .t-row:last-child { border-bottom: none; }
+  .t-name { font-weight: 700; color: #fff; }
+  .t-sep { color: var(--muted2); margin: 0 6px; }
+  .t-status { color: #ffb089; font-weight: 600; }
+  .t-date { color: var(--muted); }
+
+  .sheet .ctas { display: flex; flex-direction: column; gap: 10px; }
+  .sheet .cta {
+    padding: 14px; border-radius: 14px; font-size: 15px; font-weight: 700;
+    border: none; cursor: pointer; text-align: center;
+  }
+  .sheet .cta.primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff;
+  }
+  .sheet .cta.secondary {
+    background: var(--surface2); color: #fff; border: 1px solid var(--border);
+  }
+
+  .note-text {
+    text-align: center; color: #555; font-size: 12px; margin: 8px 0 24px;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header>
+    <h1>My Places</h1>
+  </header>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="num">12</div>
+      <div class="label">Visited</div>
+    </div>
+    <div class="stat">
+      <div class="num">4</div>
+      <div class="label">Saved</div>
+    </div>
+    <div class="stat">
+      <div class="num">3</div>
+      <div class="label">Go-tos</div>
+    </div>
+  </div>
+
+  <div class="filters">
+    <div class="filter active">All</div>
+    <div class="filter">Loved</div>
+    <div class="filter">Liked</div>
+    <div class="filter">Want to try</div>
+    <div class="filter">Go-tos</div>
+  </div>
+
+  <div class="eyebrow">Want to try</div>
+  <div class="saved-row">
+    <div class="saved-card" onclick="openSheet()">
+      <div class="saved-place">Dosa Kitchen</div>
+      <div class="saved-dish">The masala dosa</div>
+      <div class="saved-meta">South Indian · East Village</div>
+      <div class="saved-source">Puneet loved it</div>
+    </div>
+    <div class="saved-card" onclick="openSheet()">
+      <div class="saved-place">Tatiana Bar</div>
+      <div class="saved-dish">The martini</div>
+      <div class="saved-meta">Cocktails · West Village</div>
+      <div class="saved-source">Ankita's date night pick</div>
+    </div>
+  </div>
+
+  <div class="eyebrow">Been there</div>
+  <div class="place-list">
+
+    <div class="place-card" onclick="openSheet()">
+      <div class="place-top">
+        <div class="place-name">Tatiana</div>
+        <div class="place-reaction">❤️</div>
+      </div>
+      <div class="place-meta">New American · West Village · $$$</div>
+      <div class="place-dish-row">
+        <div class="place-dish">The honey duck</div>
+      </div>
+      <div class="place-note">"The duck is unreal"</div>
+      <div class="place-footer">
+        <div class="place-date">2 weeks ago</div>
+        <div class="place-table-signal">Puneet & Pragya loved it too</div>
+      </div>
+    </div>
+
+    <div class="place-card" onclick="openSheet()">
+      <div class="place-top">
+        <div class="place-name">Don Angie</div>
+        <div class="place-reaction">❤️</div>
+      </div>
+      <div class="place-meta">Italian · West Village</div>
+      <div class="place-dish-row">
+        <div class="place-dish">The carbonara</div>
+      </div>
+      <div class="place-footer">
+        <div class="place-date">1 month ago</div>
+        <div class="place-table-signal">Pragya loved it</div>
+      </div>
+    </div>
+
+    <div class="place-card" onclick="openSheet()">
+      <div class="place-top">
+        <div class="place-name">Lucali</div>
+        <div class="place-reaction">❤️</div>
+      </div>
+      <div class="place-meta">Pizza · Carroll Gardens</div>
+      <div class="place-footer">
+        <div class="place-date">3 weeks ago · 4th visit</div>
+      </div>
+    </div>
+
+    <div class="place-card" onclick="openSheet()">
+      <div class="place-top">
+        <div class="place-name">Hav & Mar</div>
+        <div class="place-reaction">👍</div>
+      </div>
+      <div class="place-meta">Seafood · Chelsea</div>
+      <div class="place-dish-row">
+        <div class="place-dish">The oysters</div>
+      </div>
+      <div class="place-footer">
+        <div class="place-date">2 months ago</div>
+        <div class="place-table-signal">Jay keeps going back</div>
+      </div>
+    </div>
+
+    <div class="place-card" onclick="openSheet()">
+      <div class="place-top">
+        <div class="place-name">Joe's Pizza</div>
+        <div class="place-reaction">😐</div>
+      </div>
+      <div class="place-meta">Pizza · West Village</div>
+      <div class="place-footer">
+        <div class="place-date">Last week · 6th visit</div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="tabbar">
+    <div class="tab"><span class="ic">🏠</span>Home</div>
+    <div class="tab"><span class="ic">🔍</span>Search</div>
+    <div class="tab active"><span class="ic">📍</span>My Places</div>
+    <div class="tab"><span class="ic">👥</span>Table</div>
+    <div class="tab"><span class="ic">✨</span>Taste</div>
+  </div>
+</div>
+
+<!-- Detail sheet for a visited place -->
+<div class="sheet-back" id="sheetBack" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="grab"></div>
+    <h2>Tatiana</h2>
+    <div class="s-cuisine">New American · West Village · $$$</div>
+
+    <div class="section-head">Your visit</div>
+    <div class="your-visit">
+      <div class="v-row">
+        <span class="v-label">Reaction</span>
+        <span class="v-val">❤️ Loved it</span>
+      </div>
+      <div class="v-row">
+        <span class="v-label">Dish</span>
+        <span class="v-dish">The honey duck</span>
+      </div>
+      <div class="v-row">
+        <span class="v-label">Note</span>
+        <span class="v-val" style="font-style:italic">"The duck is unreal"</span>
+      </div>
+      <div class="v-row">
+        <span class="v-label">When</span>
+        <span class="v-val">2 weeks ago</span>
+      </div>
+    </div>
+
+    <div class="section-head">Your table</div>
+    <div class="table-section">
+      <div class="t-row">
+        <span class="t-name">Puneet</span><span class="t-sep">·</span>
+        <span class="t-status">Loved it</span><span class="t-sep">·</span>
+        <span class="t-date">3 weeks ago</span>
+      </div>
+      <div class="t-row">
+        <span class="t-name">Pragya</span><span class="t-sep">·</span>
+        <span class="t-status">Loved it</span><span class="t-sep">·</span>
+        <span class="t-date">1 month ago</span>
+      </div>
+      <div class="t-row">
+        <span class="t-name">Aditya</span><span class="t-sep">·</span>
+        <span class="t-status" style="color:#9fc6ff">Been twice</span><span class="t-sep">·</span>
+        <span class="t-date">This month</span>
+      </div>
+    </div>
+
+    <div class="ctas">
+      <button class="cta primary" onclick="closeSheet()">Log another visit</button>
+      <button class="cta secondary" onclick="closeSheet()">Edit this visit</button>
+    </div>
+  </div>
+</div>
+
+<div class="note-text">Prototype — tap any card for details · <a href="home_prototype.html" style="color:#ff7a45">Back to Home</a> · <a href="log_meal_prototype.html" style="color:#ff7a45">Log a meal</a></div>
+
+<script>
+  document.querySelectorAll('.filter').forEach(f => {
+    f.addEventListener('click', () => {
+      document.querySelectorAll('.filter').forEach(x => x.classList.remove('active'));
+      f.classList.add('active');
+    });
+  });
+  function openSheet() {
+    document.getElementById('sheetBack').classList.add('show');
+  }
+  function closeSheet() {
+    document.getElementById('sheetBack').classList.remove('show');
+  }
+</script>
+</body>
+</html>

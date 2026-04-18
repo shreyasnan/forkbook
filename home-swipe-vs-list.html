@@ -1,0 +1,889 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ForkBook Home — Swipe vs List</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #121214;
+    --surface2: #17191C;
+    --surface3: #1A1A1D;
+    --border: #26262A;
+    --text: #F5F5F7;
+    --text-dim: #B0B0B4;
+    --muted: #8E8E93;
+    --muted2: #6B6B70;
+    --warm: #C4A882;
+    --warm-soft: rgba(196, 168, 130, 0.12);
+    --warm-stroke: rgba(196, 168, 130, 0.25);
+    --accent1: #FF7A45;
+    --accent2: #FF2D87;
+  }
+
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0;
+    background: #0A0A0B;
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    min-height: 100vh;
+  }
+
+  .page-header {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 36px 24px 18px;
+  }
+  .page-title {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.5px;
+    margin: 0 0 6px;
+  }
+  .page-sub {
+    color: var(--muted); font-size: 14px; margin: 0; max-width: 720px; line-height: 1.5;
+  }
+
+  .stage {
+    display: flex;
+    gap: 36px;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 8px 20px 64px;
+    flex-wrap: wrap;
+  }
+
+  .frame-wrap {
+    display: flex; flex-direction: column; align-items: center;
+    gap: 14px;
+  }
+  .frame-label {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.6px;
+    color: var(--warm);
+    text-transform: uppercase;
+  }
+  .frame-sub {
+    font-size: 12px; color: var(--muted); margin-top: -6px;
+  }
+
+  .phone {
+    width: 390px;
+    height: 780px;
+    border-radius: 44px;
+    background: var(--bg);
+    overflow: hidden;
+    position: relative;
+    box-shadow:
+      0 0 0 10px #1a1a1e,
+      0 0 0 11px #2a2a2e,
+      0 30px 60px rgba(0,0,0,0.55);
+  }
+
+  .notch {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 120px; height: 28px; background: #0a0a0b;
+    border-radius: 18px; z-index: 40;
+  }
+
+  .scroll {
+    position: absolute; inset: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding-top: 56px;
+    padding-bottom: 90px;
+    scrollbar-width: none;
+  }
+  .scroll::-webkit-scrollbar { display: none; }
+
+  /* ── Header + chips (shared) ── */
+  .hdr {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 0 20px;
+    margin-bottom: 18px;
+  }
+  .hdr-title {
+    font-size: 24px; font-weight: 800; letter-spacing: -0.4px;
+  }
+  .menu-icon {
+    width: 36px; height: 36px; display: grid; place-items: center;
+    color: var(--text);
+  }
+
+  .chips {
+    display: flex; gap: 8px;
+    padding: 0 20px;
+    margin-bottom: 24px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex-shrink: 0;
+    font-size: 13px; font-weight: 700;
+    padding: 9px 14px; border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.22);
+    color: var(--text-dim);
+    background: rgba(255,255,255,0.06);
+    white-space: nowrap;
+  }
+  .chip.on {
+    color: var(--warm);
+    background: var(--warm-soft);
+    border-color: var(--warm-stroke);
+  }
+
+  /* ── Section headers ── */
+  .section-head {
+    padding: 28px 22px 10px;
+  }
+  .section-eyebrow {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase;
+    display: block;
+  }
+  .section-sub {
+    font-size: 13px; font-weight: 500;
+    color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  /* ─────────────────────────────────────────────
+     LIST-STYLE UX (current)
+  ───────────────────────────────────────────── */
+
+  .hero-card-list {
+    margin: 0 16px;
+    padding: 22px;
+    border-radius: 24px;
+    background:
+      linear-gradient(to bottom,
+        rgba(196, 168, 130, 0.08) 0%,
+        #171A1D 55%);
+    border: 1px solid rgba(255,255,255,0.05);
+    position: relative;
+    box-shadow: 0 22px 44px rgba(0,0,0,0.45);
+  }
+  .hero-card-list::after {
+    content: ""; position: absolute; inset: 0;
+    border-radius: 24px; pointer-events: none;
+    background: radial-gradient(circle at 0% 0%, rgba(196,168,130,0.07) 0%, transparent 48%);
+  }
+
+  .hero-eyebrow {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.4px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .hero-name-row {
+    display: flex; align-items: baseline; gap: 10px;
+    margin-bottom: 4px;
+  }
+  .hero-name {
+    font-size: 28px; font-weight: 900; letter-spacing: -0.6px;
+    color: var(--text);
+    flex: 1; min-width: 0;
+  }
+  .hero-dist { font-size: 13px; font-weight: 600; color: var(--muted2); }
+  .chevron { font-size: 14px; color: var(--muted2); }
+
+  .hero-meta {
+    font-size: 13px; font-weight: 500;
+    color: var(--muted);
+    margin-bottom: 18px;
+  }
+  .hero-dishes {
+    font-size: 18px; font-weight: 600;
+    color: var(--text);
+    margin-bottom: 14px;
+  }
+  .hero-trust {
+    font-size: 13px; font-weight: 600;
+    color: var(--warm);
+  }
+  .hero-changed {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-dim);
+    margin-top: 10px;
+  }
+  .hero-changed .dot {
+    width: 6px; height: 6px; border-radius: 999px; background: var(--warm);
+  }
+
+  .backup-list {
+    margin-top: 10px;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 0 16px;
+  }
+  .backup-card {
+    padding: 14px 16px;
+    background: #131517;
+    border-radius: 16px;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  .backup-name-row {
+    display: flex; align-items: baseline; gap: 8px;
+    margin-bottom: 3px;
+  }
+  .backup-name {
+    font-size: 16px; font-weight: 700; flex: 1; min-width: 0;
+  }
+  .backup-dist { font-size: 12px; font-weight: 600; color: var(--muted2); }
+  .backup-chevron { font-size: 11px; color: var(--muted2); }
+  .backup-meta {
+    font-size: 12px; font-weight: 500; color: var(--muted2);
+    margin-bottom: 6px;
+  }
+  .backup-dishes {
+    font-size: 14px; font-weight: 600;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+  .backup-trust {
+    font-size: 12px; font-weight: 600; color: var(--warm);
+  }
+
+  /* ─────────────────────────────────────────────
+     SWIPE-STYLE UX
+  ───────────────────────────────────────────── */
+
+  .swipe-stage {
+    position: relative;
+    height: 500px;
+    margin: 0 16px;
+  }
+
+  .swipe-deck {
+    position: relative;
+    height: 100%;
+  }
+  .swipe-card {
+    position: absolute; inset: 0;
+    padding: 26px;
+    border-radius: 28px;
+    background:
+      linear-gradient(to bottom,
+        rgba(196, 168, 130, 0.1) 0%,
+        #17191C 55%);
+    border: 1px solid rgba(255,255,255,0.06);
+    box-shadow: 0 30px 60px rgba(0,0,0,0.55);
+    display: flex; flex-direction: column;
+    cursor: grab;
+    user-select: none;
+    touch-action: pan-y;
+    transition: transform .35s cubic-bezier(.22,.61,.36,1),
+                opacity .35s;
+    will-change: transform;
+  }
+  .swipe-card:active { cursor: grabbing; }
+
+  .swipe-card.is-hero {
+    background:
+      linear-gradient(135deg,
+        rgba(196, 168, 130, 0.18) 0%,
+        rgba(196, 168, 130, 0.04) 50%,
+        #17191C 100%);
+    border: 1px solid rgba(196, 168, 130, 0.22);
+  }
+
+  .swipe-card .eyebrow {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.8px;
+    color: var(--warm);
+    text-transform: uppercase;
+    margin-bottom: 16px;
+  }
+  .swipe-card.backup .eyebrow {
+    color: var(--muted);
+  }
+  .swipe-card .name {
+    font-size: 34px; font-weight: 900; letter-spacing: -0.9px;
+    line-height: 1.02;
+    margin-bottom: 6px;
+  }
+  .swipe-card .meta {
+    font-size: 13px; font-weight: 500; color: var(--muted);
+    margin-bottom: 24px;
+  }
+  .swipe-card .dish-lead {
+    font-size: 22px; font-weight: 800; line-height: 1.2;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    -webkit-background-clip: text; background-clip: text;
+    color: transparent;
+    margin-bottom: 8px;
+  }
+  .swipe-card .dish-second {
+    font-size: 14px; font-weight: 500; color: var(--text-dim);
+  }
+  .swipe-card .trust {
+    margin-top: auto;
+    font-size: 13px; font-weight: 700; color: var(--warm);
+    padding-top: 16px;
+  }
+  .swipe-card .changed {
+    display: inline-flex; align-items: center; gap: 6px;
+    font-size: 12px; color: var(--text-dim);
+    margin-top: 8px;
+  }
+  .swipe-card .changed .dot {
+    width: 6px; height: 6px; border-radius: 999px; background: var(--warm);
+  }
+
+  .stack-hint {
+    position: absolute; right: 14px; top: 14px;
+    font-size: 10px; font-weight: 800; letter-spacing: 1.4px;
+    color: var(--muted);
+    background: rgba(0,0,0,0.4);
+    padding: 5px 9px;
+    border-radius: 999px;
+    border: 1px solid rgba(255,255,255,0.06);
+  }
+
+  /* deck layering */
+  .swipe-card[data-depth="0"] { z-index: 5; }
+  .swipe-card[data-depth="1"] { z-index: 4; transform: translateY(10px) scale(0.96); opacity: 0.85; }
+  .swipe-card[data-depth="2"] { z-index: 3; transform: translateY(18px) scale(0.92); opacity: 0.6; }
+  .swipe-card[data-depth="3"] { z-index: 2; transform: translateY(24px) scale(0.88); opacity: 0.35; }
+  .swipe-card[data-depth="4"], .swipe-card[data-depth="5"] {
+    z-index: 1; transform: translateY(28px) scale(0.86); opacity: 0;
+    pointer-events: none;
+  }
+
+  /* gesture feedback */
+  .swipe-card.dragging {
+    transition: none;
+  }
+  .swipe-overlay {
+    position: absolute; inset: 0;
+    border-radius: 28px;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity .12s;
+    display: grid; place-items: center;
+  }
+  .swipe-card .next-hint,
+  .swipe-card .skip-hint {
+    position: absolute; top: 22px;
+    padding: 6px 12px;
+    border-radius: 999px;
+    font-size: 12px; font-weight: 800; letter-spacing: 1px;
+    text-transform: uppercase;
+    opacity: 0;
+    transition: opacity .12s;
+  }
+  .swipe-card .next-hint {
+    right: 22px;
+    background: rgba(196,168,130,0.2); color: var(--warm);
+    border: 1px solid rgba(196,168,130,0.4);
+  }
+  .swipe-card .skip-hint {
+    left: 22px;
+    background: rgba(255,122,69,0.18); color: var(--accent1);
+    border: 1px solid rgba(255,122,69,0.4);
+  }
+
+  /* bottom actions */
+  .swipe-actions {
+    display: flex; justify-content: center; gap: 12px;
+    margin: 18px 16px 0;
+  }
+  .swipe-btn {
+    flex: 1;
+    padding: 14px;
+    border-radius: 14px;
+    font-size: 14px; font-weight: 700;
+    border: 1px solid rgba(255,255,255,0.08);
+    background: rgba(255,255,255,0.04);
+    color: var(--text);
+    cursor: pointer;
+  }
+  .swipe-btn.primary {
+    background: rgba(196,168,130,0.18);
+    border-color: rgba(196,168,130,0.35);
+    color: var(--text);
+  }
+
+  .progress-pips {
+    display: flex; justify-content: center; gap: 6px;
+    margin-top: 14px;
+  }
+  .pip {
+    width: 22px; height: 3px; border-radius: 2px;
+    background: rgba(255,255,255,0.12);
+    transition: background .2s;
+  }
+  .pip.on { background: var(--warm); }
+
+  .swipe-context {
+    padding: 16px 22px 8px;
+  }
+  .swipe-context-title {
+    font-size: 11px; font-weight: 800; letter-spacing: 1.5px;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .swipe-context-live {
+    font-size: 13px; color: var(--text-dim);
+    margin-top: 3px;
+  }
+
+  /* ── tab bar (shared bottom) ── */
+  .tabbar {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    height: 78px;
+    background: rgba(0,0,0,0.92);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    z-index: 50;
+  }
+  .tab {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 4px;
+    color: var(--muted2);
+    font-size: 10px; font-weight: 600;
+  }
+  .tab.on { color: var(--text); }
+  .tab-ic {
+    width: 22px; height: 22px;
+    display: grid; place-items: center;
+  }
+
+  .notes {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 24px 40px 80px;
+    color: var(--text-dim);
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .notes h3 {
+    color: var(--text); font-size: 15px; font-weight: 700;
+    margin: 24px 0 8px;
+  }
+  .notes ul { margin: 4px 0 0 0; padding-left: 20px; }
+  .notes li { margin: 4px 0; }
+
+  @media (max-width: 880px) {
+    .stage { flex-direction: column; align-items: center; }
+  }
+</style>
+</head>
+<body>
+
+<header class="page-header">
+  <h1 class="page-title">Home — swipe vs list</h1>
+  <p class="page-sub">
+    Same ranking feeds both prototypes: one hero + four backups (New Picks For Dinner).
+    On the left, the current stacked layout. On the right, a swipe deck where the hero is card #1;
+    swiping left or tapping "Next" reveals the backups one by one.
+  </p>
+</header>
+
+<div class="stage">
+
+  <!-- ════════════════════════════════════════════════════
+       LIST UX (current)
+  ════════════════════════════════════════════════════ -->
+  <div class="frame-wrap">
+    <div class="frame-label">List UX · current</div>
+    <div class="frame-sub">Hero card + stacked list</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="scroll">
+        <div class="hdr">
+          <div class="hdr-title">Dinner tonight</div>
+          <div class="menu-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </div>
+        </div>
+
+        <div class="chips">
+          <div class="chip">Date night</div>
+          <div class="chip">Quick bite</div>
+          <div class="chip">Cozy</div>
+          <div class="chip">Group dinner</div>
+          <div class="chip">Celebration</div>
+        </div>
+
+        <div class="hero-card-list">
+          <div class="hero-eyebrow">Your table's pick for dinner</div>
+          <div class="hero-name-row">
+            <div class="hero-name">Shizen</div>
+            <div class="hero-dist">1.2 mi</div>
+            <div class="chevron">›</div>
+          </div>
+          <div class="hero-meta">Japanese · Mission</div>
+          <div class="hero-dishes">Spicy Garlic Miso · Avocado Roll</div>
+          <div class="hero-trust">Picked by 4 from your table</div>
+          <div class="hero-changed">
+            <span class="dot"></span>
+            +3 logs this week
+          </div>
+        </div>
+
+        <div class="section-head">
+          <span class="section-eyebrow">Picks you may like for dinner</span>
+          <div class="section-sub">New to you</div>
+        </div>
+
+        <div class="backup-list">
+
+          <div class="backup-card">
+            <div class="backup-name-row">
+              <div class="backup-name">Flour + Water</div>
+              <div class="backup-dist">0.8 mi</div>
+              <div class="backup-chevron">›</div>
+            </div>
+            <div class="backup-meta">Italian · Mission</div>
+            <div class="backup-dishes">Margherita · Burrata</div>
+            <div class="backup-trust">Picked by Ankita &amp; Puneet</div>
+          </div>
+
+          <div class="backup-card">
+            <div class="backup-name-row">
+              <div class="backup-name">Dosa Point</div>
+              <div class="backup-dist">1.6 mi</div>
+              <div class="backup-chevron">›</div>
+            </div>
+            <div class="backup-meta">Indian · Dogpatch</div>
+            <div class="backup-dishes">Masala Dosa · Filter Coffee</div>
+            <div class="backup-trust">Picked by 3 from your table</div>
+          </div>
+
+          <div class="backup-card">
+            <div class="backup-name-row">
+              <div class="backup-name">Hinodeya Ramen</div>
+              <div class="backup-dist">2.4 mi</div>
+              <div class="backup-chevron">›</div>
+            </div>
+            <div class="backup-meta">Japanese · Fillmore</div>
+            <div class="backup-dishes">Creamy Ramen · Dashi Butter Corn</div>
+            <div class="backup-trust">Picked by Pragya</div>
+          </div>
+
+          <div class="backup-card">
+            <div class="backup-name-row">
+              <div class="backup-name">Koo</div>
+              <div class="backup-dist">3.8 mi</div>
+              <div class="backup-chevron">›</div>
+            </div>
+            <div class="backup-meta">Japanese · Inner Sunset</div>
+            <div class="backup-dishes">Crispy Tofu · Eggplant Dengaku</div>
+            <div class="backup-trust">Picked by Pragya</div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="tabbar">
+        <div class="tab on">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v11a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/></svg>
+          </div>
+          Home
+        </div>
+        <div class="tab">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          </div>
+          Search
+        </div>
+        <div class="tab">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+          </div>
+          My Places
+        </div>
+        <div class="tab">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c1-3.5 3.5-5 6-5s5 1.5 6 5"/><path d="M14 19c.7-2 2.3-3 4-3"/></svg>
+          </div>
+          Table
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ════════════════════════════════════════════════════
+       SWIPE UX (proposed)
+  ════════════════════════════════════════════════════ -->
+  <div class="frame-wrap">
+    <div class="frame-label">Swipe UX · proposed</div>
+    <div class="frame-sub">Hero as primary card · swipe left for backups</div>
+    <div class="phone">
+      <div class="notch"></div>
+      <div class="scroll" id="swipeScroll">
+        <div class="hdr">
+          <div class="hdr-title">Dinner tonight</div>
+          <div class="menu-icon">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+          </div>
+        </div>
+
+        <div class="chips">
+          <div class="chip">Date night</div>
+          <div class="chip">Quick bite</div>
+          <div class="chip">Cozy</div>
+          <div class="chip">Group dinner</div>
+          <div class="chip">Celebration</div>
+        </div>
+
+        <div class="swipe-context">
+          <div class="swipe-context-title"><span id="swipeCtxLabel">Your table's pick</span></div>
+          <div class="swipe-context-live"><span id="swipeProgress">1 of 5</span> · swipe for more</div>
+        </div>
+
+        <div class="swipe-stage">
+          <div class="swipe-deck" id="deck">
+            <!-- Cards injected by JS -->
+          </div>
+        </div>
+
+        <div class="progress-pips" id="pips"></div>
+
+        <div class="swipe-actions">
+          <button class="swipe-btn" id="btnSkip">Not tonight</button>
+          <button class="swipe-btn primary" id="btnGo">Go here</button>
+        </div>
+
+      </div>
+
+      <div class="tabbar">
+        <div class="tab on">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10l9-7 9 7v11a2 2 0 0 1-2 2h-4v-7h-6v7H5a2 2 0 0 1-2-2z"/></svg>
+          </div>
+          Home
+        </div>
+        <div class="tab">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+          </div>
+          Search
+        </div>
+        <div class="tab">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3h12v18l-6-4-6 4z"/></svg>
+          </div>
+          My Places
+        </div>
+        <div class="tab">
+          <div class="tab-ic">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="8" r="3"/><circle cx="17" cy="9" r="2.5"/><path d="M3 20c1-3.5 3.5-5 6-5s5 1.5 6 5"/><path d="M14 19c.7-2 2.3-3 4-3"/></svg>
+          </div>
+          Table
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h3>Differences baked in</h3>
+  <ul>
+    <li><strong>Hero treatment:</strong> the swipe version renders the top pick bigger, with a dish-name gradient and more breathing room. It feels like <em>the</em> answer, not the first item in a list.</li>
+    <li><strong>Context label changes as you swipe:</strong> card #1 is "Your table's pick." Cards #2–#5 are "Picks you may like for dinner." Same ranking, just revealed one at a time instead of stacked.</li>
+    <li><strong>Fewer decisions per screen:</strong> list UX shows 5 names at once. Swipe UX shows one. Good for "I don't know, suggest something" mode; worse for "let me browse my options."</li>
+    <li><strong>Actions live on the card, not in a sheet:</strong> "Go here" / "Not tonight" sit below the deck so the primary decision is always one tap away.</li>
+    <li><strong>Progress pips + "2 of 5":</strong> make it clear there's a bounded set — users don't feel like they're committing to an infinite feed.</li>
+  </ul>
+
+  <h3>Try it</h3>
+  <ul>
+    <li>Drag the top card left/right, or tap <strong>Go here</strong> / <strong>Not tonight</strong>.</li>
+    <li>At the end, the deck loops so you can keep exploring the interaction.</li>
+  </ul>
+
+  <h3>Things to stress-test</h3>
+  <ul>
+    <li>The swipe UX hides ranking. Users who like scanning 5 names at once may feel they've lost agency.</li>
+    <li>An occasion chip change (top of screen) resets the deck — okay, or jarring?</li>
+    <li>A committed-pick card ("Did you end up going?") breaks the single-card rhythm. In the list UX it sits above the hero; in swipe UX, where should it live?</li>
+  </ul>
+</div>
+
+<script>
+  const DATA = [
+    {
+      isHero: true,
+      eyebrow: "Your table's pick for dinner",
+      ctx: "Your table's pick",
+      name: "Shizen",
+      meta: "Japanese · Mission · 1.2 mi",
+      dishLead: "Spicy Garlic Miso Ramen",
+      dishSecond: "Also try: Avocado Roll, Agedashi Tofu",
+      trust: "Picked by 4 from your table",
+      changed: "+3 logs this week"
+    },
+    {
+      isHero: false,
+      eyebrow: "New to you",
+      ctx: "Picks you may like for dinner",
+      name: "Flour + Water",
+      meta: "Italian · Mission · 0.8 mi",
+      dishLead: "Margherita Pizza",
+      dishSecond: "Also try: Burrata",
+      trust: "Picked by Ankita & Puneet",
+      changed: null
+    },
+    {
+      isHero: false,
+      eyebrow: "New to you",
+      ctx: "Picks you may like for dinner",
+      name: "Dosa Point",
+      meta: "Indian · Dogpatch · 1.6 mi",
+      dishLead: "Masala Dosa",
+      dishSecond: "Also try: Filter Coffee, Idli Sambar",
+      trust: "Picked by 3 from your table",
+      changed: "Puneet just logged this"
+    },
+    {
+      isHero: false,
+      eyebrow: "Fresh from your table",
+      ctx: "Picks you may like for dinner",
+      name: "Hinodeya Ramen",
+      meta: "Japanese · Fillmore · 2.4 mi",
+      dishLead: "Creamy Ramen",
+      dishSecond: "Also try: Dashi Butter Corn",
+      trust: "Picked by Pragya",
+      changed: null
+    },
+    {
+      isHero: false,
+      eyebrow: "Worth trying",
+      ctx: "Picks you may like for dinner",
+      name: "Koo",
+      meta: "Japanese · Inner Sunset · 3.8 mi",
+      dishLead: "Crispy Tofu",
+      dishSecond: "Also try: Eggplant Dengaku",
+      trust: "Picked by Pragya",
+      changed: null
+    }
+  ];
+
+  const deck = document.getElementById('deck');
+  const pipsEl = document.getElementById('pips');
+  const progressEl = document.getElementById('swipeProgress');
+  const ctxLabelEl = document.getElementById('swipeCtxLabel');
+
+  let topIdx = 0;
+
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderCards() {
+    deck.innerHTML = '';
+    DATA.forEach((d, i) => {
+      const depth = (i - topIdx + DATA.length) % DATA.length;
+      const el = document.createElement('div');
+      el.className = 'swipe-card ' + (d.isHero ? 'is-hero' : 'backup');
+      el.setAttribute('data-depth', depth);
+      el.setAttribute('data-idx', i);
+      el.innerHTML = `
+        <span class="skip-hint">Skip</span>
+        <span class="next-hint">Noted</span>
+        ${depth === 0 && !d.isHero ? '<div class="stack-hint">' + esc(d.ctx) + '</div>' : ''}
+        <div class="eyebrow">${esc(d.eyebrow)}</div>
+        <div class="name">${esc(d.name)}</div>
+        <div class="meta">${esc(d.meta)}</div>
+        <div class="dish-lead">${esc(d.dishLead)}</div>
+        <div class="dish-second">${esc(d.dishSecond)}</div>
+        <div class="trust">${esc(d.trust)}${d.changed ? `<span class="changed"><span class="dot"></span>${esc(d.changed)}</span>` : ''}</div>
+      `;
+      deck.appendChild(el);
+    });
+    renderPips();
+    renderProgress();
+    wireGesture();
+  }
+
+  function renderPips() {
+    pipsEl.innerHTML = '';
+    DATA.forEach((_, i) => {
+      const p = document.createElement('div');
+      p.className = 'pip' + (i === topIdx ? ' on' : '');
+      pipsEl.appendChild(p);
+    });
+  }
+
+  function renderProgress() {
+    const d = DATA[topIdx];
+    progressEl.textContent = `${topIdx + 1} of ${DATA.length}`;
+    ctxLabelEl.textContent = d.ctx;
+  }
+
+  function advance(direction) {
+    const top = deck.querySelector('[data-depth="0"]');
+    if (!top) return;
+    const x = direction === 'next' ? 420 : -420;
+    top.style.transition = 'transform .35s cubic-bezier(.22,.61,.36,1), opacity .35s';
+    top.style.transform = `translateX(${x}px) rotate(${direction === 'next' ? 8 : -8}deg)`;
+    top.style.opacity = '0';
+    setTimeout(() => {
+      topIdx = (topIdx + 1) % DATA.length;
+      renderCards();
+    }, 320);
+  }
+
+  function wireGesture() {
+    const top = deck.querySelector('[data-depth="0"]');
+    if (!top) return;
+    let startX = 0, startY = 0, dx = 0, dy = 0, dragging = false;
+    const overlayNext = top.querySelector('.next-hint');
+    const overlaySkip = top.querySelector('.skip-hint');
+
+    function onDown(e) {
+      dragging = true;
+      top.classList.add('dragging');
+      const p = pt(e);
+      startX = p.x; startY = p.y; dx = 0; dy = 0;
+    }
+    function onMove(e) {
+      if (!dragging) return;
+      const p = pt(e);
+      dx = p.x - startX; dy = p.y - startY;
+      // lock to horizontal if the user clearly moves sideways
+      if (Math.abs(dx) > Math.abs(dy)) {
+        e.preventDefault && e.preventDefault();
+        const rot = dx / 20;
+        top.style.transform = `translateX(${dx}px) rotate(${rot}deg)`;
+        const mag = Math.min(1, Math.abs(dx) / 90);
+        overlayNext.style.opacity = dx > 0 ? mag : 0;
+        overlaySkip.style.opacity = dx < 0 ? mag : 0;
+      }
+    }
+    function onUp() {
+      if (!dragging) return;
+      dragging = false;
+      top.classList.remove('dragging');
+      const THRESH = 90;
+      if (dx > THRESH)       advance('next');
+      else if (dx < -THRESH) advance('skip');
+      else {
+        top.style.transform = '';
+        overlayNext.style.opacity = 0;
+        overlaySkip.style.opacity = 0;
+      }
+    }
+    function pt(e) {
+      if (e.touches && e.touches[0]) return { x: e.touches[0].clientX, y: e.touches[0].clientY };
+      return { x: e.clientX, y: e.clientY };
+    }
+
+    top.addEventListener('mousedown', onDown);
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+    top.addEventListener('touchstart', onDown, { passive: true });
+    window.addEventListener('touchmove', onMove, { passive: false });
+    window.addEventListener('touchend', onUp);
+  }
+
+  document.getElementById('btnGo').addEventListener('click', () => advance('next'));
+  document.getElementById('btnSkip').addEventListener('click', () => advance('skip'));
+
+  renderCards();
+</script>
+
+</body>
+</html>

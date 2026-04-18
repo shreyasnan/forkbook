@@ -1,0 +1,746 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — Home (Stateful)</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #121214;
+    --surface2: #1a1a1d;
+    --border: #26262a;
+    --text: #fff;
+    --muted: #8e8e93;
+    --muted2: #6b6b70;
+    --accent1: #ff7a45;
+    --accent2: #ff2d87;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+
+  .phone {
+    max-width: 400px; margin: 24px auto;
+    background: var(--bg); border-radius: 36px;
+    border: 1px solid #222; overflow: hidden;
+    min-height: 820px; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  header {
+    padding: 18px 20px 4px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 26px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+  header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+  }
+
+  .moments {
+    display: flex; gap: 8px; padding: 12px 20px 6px; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .moments::-webkit-scrollbar { display: none; }
+  .moment {
+    flex: 0 0 auto; padding: 8px 14px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .moment.active {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #fff; border-color: transparent;
+  }
+
+  /* Planned strip */
+  .planned-strip {
+    margin: 12px 16px 4px;
+    background: rgba(255,122,69,0.06);
+    border: 1px solid rgba(255,122,69,0.15);
+    border-radius: 14px; padding: 12px 16px;
+    display: none; cursor: pointer;
+    transition: all .3s ease;
+  }
+  .planned-strip.show {
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .planned-strip .ps-left { display: flex; align-items: center; gap: 10px; }
+  .planned-strip .ps-check {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; color: #fff;
+  }
+  .planned-strip .ps-text { font-size: 14px; font-weight: 600; }
+  .planned-strip .ps-sub { font-size: 12px; color: var(--muted); }
+  .planned-strip .ps-arrow { color: var(--muted); font-size: 16px; }
+
+  .eyebrow {
+    padding: 20px 20px 10px 22px;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+    transition: opacity .3s ease;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    margin: 0 16px 10px;
+    background:
+      radial-gradient(140% 80% at 0% 0%, rgba(255,122,69,0.16), transparent 60%),
+      radial-gradient(140% 80% at 100% 100%, rgba(255,45,135,0.12), transparent 60%),
+      linear-gradient(160deg, #1a1417, #14171d);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 24px; padding: 22px;
+    cursor: pointer;
+    transition: all .4s ease;
+    opacity: 1; transform: translateX(0);
+  }
+  .hero.exit { opacity: 0; transform: translateX(-60px); pointer-events: none; }
+  .hero.enter { opacity: 0; transform: translateX(40px); }
+  .hero:active { transform: scale(0.995); }
+
+  .hero .place-name {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.4px;
+    margin-bottom: 2px;
+  }
+  .hero .place-meta {
+    font-size: 13px; color: var(--muted); margin-bottom: 14px;
+  }
+  .hero .dishes {
+    display: flex; flex-direction: column; gap: 3px;
+    margin-bottom: 4px;
+  }
+  .hero .dish-line {
+    font-size: 15px; line-height: 1.3; font-weight: 700;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .hero .dish-line .emoji { font-size: 14px; }
+  .hero .dish-line.primary .name {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .dish-line .name { color: #d6d6da; }
+  .hero .dish-more {
+    font-size: 13px; color: var(--accent1); font-weight: 600;
+    margin-top: 2px; margin-bottom: 6px;
+  }
+  .hero .trust-line {
+    font-size: 14px; color: #b8b8be;
+  }
+
+  /* ── CAROUSEL ── */
+  .carousel {
+    display: flex; gap: 10px; padding: 2px 16px 18px;
+    overflow-x: auto; scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    transition: opacity .3s ease;
+  }
+  .carousel::-webkit-scrollbar { display: none; }
+  .pick {
+    flex: 0 0 68%; scroll-snap-align: start;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 14px;
+    cursor: pointer;
+    transition: all .3s ease;
+  }
+  .pick .pick-place { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .pick .pick-dish {
+    font-size: 13px; font-weight: 600;
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 2px;
+  }
+  .pick .pick-meta { font-size: 12px; color: var(--muted2); }
+
+  /* ── GO-TOS ── */
+  .gotos { padding: 2px 20px 20px; }
+  .gotos .row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  .gotos .row::-webkit-scrollbar { display: none; }
+  .goto {
+    flex: 0 0 auto; padding: 9px 14px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; white-space: nowrap; color: #d6d6da;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .goto .count { color: var(--muted2); font-weight: 500; font-size: 12px; }
+
+  /* ── TAB BAR ── */
+  .tabbar {
+    position: sticky; bottom: 0;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around; padding: 10px 0 14px;
+  }
+  .tab { color: var(--muted); font-size: 11px; text-align: center; }
+  .tab.active { color: #fff; }
+  .tab .ic { font-size: 20px; display: block; }
+
+  /* ── SHEET ── */
+  .sheet-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: flex-end; justify-content: center; z-index: 50;
+  }
+  .sheet-back.show { display: flex; }
+  .sheet {
+    width: 100%; max-width: 400px;
+    background: #131316;
+    border-radius: 24px 24px 0 0;
+    padding: 14px 20px 28px;
+    max-height: 84vh; overflow-y: auto;
+  }
+  .sheet .grab { width: 36px; height: 4px; background: #3a3a3f; border-radius: 2px; margin: 0 auto 18px; }
+  .sheet .sheet-place { font-size: 24px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.3px; }
+  .sheet .sheet-cuisine { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+  .sheet .reason-block {
+    font-size: 16px; line-height: 1.5; color: #ececef;
+    margin-bottom: 20px;
+  }
+  .sheet .reason-block .accent {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 700;
+  }
+  .sheet .section-head {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin: 0 0 10px; font-weight: 700;
+  }
+  .takes { margin-bottom: 20px; }
+  .take-row {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .take-row:last-child { border-bottom: none; }
+  .take-content { display: flex; flex-direction: column; }
+
+  .ctas { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .cta {
+    padding: 15px; border-radius: 14px; font-size: 15px; font-weight: 700;
+    border: none; cursor: pointer; text-align: center;
+  }
+  .cta.primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff;
+  }
+  .cta.secondary {
+    background: var(--surface2); color: #fff; border: 1px solid var(--border);
+  }
+  .cta.tertiary { background: transparent; color: var(--muted); padding: 10px; }
+
+  /* ── INLINE LOG FLOW (inside sheet) ── */
+  .log-flow { display: none; }
+  .log-flow.show { display: block; }
+  .log-flow .log-title {
+    font-size: 18px; font-weight: 800; margin-bottom: 16px;
+  }
+  .reaction-row { display: flex; gap: 10px; margin-bottom: 20px; }
+  .reaction {
+    flex: 1; padding: 14px 8px; border-radius: 14px;
+    background: var(--surface2); border: 2px solid var(--border);
+    text-align: center; cursor: pointer; transition: all .15s ease;
+  }
+  .reaction.selected {
+    border-color: var(--accent1);
+    background: rgba(255,122,69,0.1);
+  }
+  .reaction .r-emoji { font-size: 24px; display: block; margin-bottom: 4px; }
+  .reaction .r-label { font-size: 11px; font-weight: 600; color: var(--muted); }
+  .reaction.selected .r-label { color: var(--text); }
+
+  .log-dish-section { margin-bottom: 16px; }
+  .log-dish-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+  .log-dish-chip {
+    padding: 8px 12px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: #d6d6da; cursor: pointer;
+  }
+  .log-dish-chip.selected {
+    background: rgba(255,122,69,0.12); border-color: var(--accent1); color: #fff;
+  }
+  .log-note {
+    width: 100%; padding: 12px 14px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: #fff; font-size: 14px; outline: none; resize: none;
+    min-height: 50px; margin-top: 12px;
+  }
+  .log-note::placeholder { color: var(--muted2); }
+
+  /* ── EMPTY STATE ── */
+  .empty-state {
+    margin: 0 16px 10px;
+    padding: 40px 22px;
+    text-align: center;
+    border: 1px dashed var(--border);
+    border-radius: 24px;
+    display: none;
+  }
+  .empty-state.show { display: block; }
+  .empty-state .es-emoji { font-size: 32px; margin-bottom: 8px; }
+  .empty-state .es-title { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+  .empty-state .es-sub { font-size: 13px; color: var(--muted); }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: #1c1c1e; border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 999px; font-size: 13px;
+    display: none; z-index: 60;
+  }
+  .toast.show { display: flex; }
+
+  .note { text-align: center; color: #555; font-size: 12px; margin: 8px 0 8px; }
+  .controls { text-align: center; margin-bottom: 24px; }
+  .controls button {
+    background: #1c1c1e; color: #fff; border: 1px solid #2a2a2c;
+    padding: 6px 14px; border-radius: 10px; cursor: pointer; margin: 4px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header>
+    <h1>Home</h1>
+    <div class="avatar"></div>
+  </header>
+
+  <div class="moments">
+    <div class="moment active">Tonight</div>
+    <div class="moment">Lunch</div>
+    <div class="moment">Date night</div>
+    <div class="moment">Group dinner</div>
+    <div class="moment">Quick bite</div>
+    <div class="moment">Special</div>
+  </div>
+
+  <!-- Planned strip — appears after "Go here" -->
+  <div class="planned-strip" id="plannedStrip">
+    <div class="ps-left">
+      <div class="ps-check">✓</div>
+      <div>
+        <div class="ps-text" id="plannedName">Boiling Beijing</div>
+        <div class="ps-sub">Planned for tonight</div>
+      </div>
+    </div>
+    <div class="ps-arrow">›</div>
+  </div>
+
+  <div class="eyebrow" id="heroEyebrow">Top pick for tonight</div>
+
+  <!-- HERO — cycles through picks -->
+  <div class="hero" id="heroCard" onclick="openSheet()"></div>
+
+  <!-- Empty state when all picks consumed -->
+  <div class="empty-state" id="emptyState">
+    <div class="es-emoji">✨</div>
+    <div class="es-title">You've seen all your picks</div>
+    <div class="es-sub">Check back tomorrow or ask your table to log more</div>
+  </div>
+
+  <div class="eyebrow" id="carouselEyebrow">Or these picks</div>
+  <div class="carousel" id="carousel"></div>
+
+  <div class="eyebrow">Your go-tos</div>
+  <div class="gotos">
+    <div class="row">
+      <div class="goto">Lucali <span class="count">· 4x</span></div>
+      <div class="goto">Joe's Pizza <span class="count">· 6x</span></div>
+      <div class="goto">Saigon Social <span class="count">· 3x</span></div>
+      <div class="goto">Cafe Mogador <span class="count">· 5x</span></div>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <div class="tab active"><span class="ic">🏠</span>Home</div>
+    <div class="tab"><span class="ic">🔍</span>Search</div>
+    <div class="tab"><span class="ic">📍</span>My Places</div>
+    <div class="tab"><span class="ic">👥</span>Table</div>
+    <div class="tab"><span class="ic">✨</span>Taste</div>
+  </div>
+</div>
+
+<div class="note">Stateful prototype — try all 3 CTAs · <a href="home_prototype.html" style="color:#ff7a45">rich</a> · <a href="home_prototype_sparse.html" style="color:#ff7a45">sparse</a></div>
+<div class="controls">
+  <button onclick="resetAll()">Reset all picks</button>
+</div>
+
+<!-- DECISION SHEET -->
+<div class="sheet-back" id="sheetBack" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet" id="sheetContent">
+    <div class="grab"></div>
+
+    <!-- Recommendation view (default) -->
+    <div id="sheetRec">
+      <div class="sheet-place" id="sheetPlace"></div>
+      <div class="sheet-cuisine" id="sheetCuisine"></div>
+      <div class="reason-block" id="sheetReason"></div>
+
+      <div class="section-head">What to order</div>
+      <div class="takes" id="sheetDishes"></div>
+
+      <div class="ctas">
+        <button class="cta primary" onclick="ctaGoHere()">Go here</button>
+        <button class="cta secondary" onclick="ctaIWentHere()">I went here</button>
+        <button class="cta tertiary" onclick="ctaSaveForLater()">Save for later</button>
+      </div>
+    </div>
+
+    <!-- Inline log flow (replaces rec view when "I went here" is tapped) -->
+    <div class="log-flow" id="logFlow">
+      <div class="sheet-place" id="logPlace"></div>
+      <div class="sheet-cuisine" id="logCuisine"></div>
+
+      <div class="log-title">How was it?</div>
+      <div class="reaction-row">
+        <div class="reaction" onclick="selectReaction(this)">
+          <span class="r-emoji">❤️</span><span class="r-label">Loved it</span>
+        </div>
+        <div class="reaction" onclick="selectReaction(this)">
+          <span class="r-emoji">👍</span><span class="r-label">Liked it</span>
+        </div>
+        <div class="reaction" onclick="selectReaction(this)">
+          <span class="r-emoji">😐</span><span class="r-label">Fine</span>
+        </div>
+        <div class="reaction" onclick="selectReaction(this)">
+          <span class="r-emoji">👎</span><span class="r-label">Skip it</span>
+        </div>
+      </div>
+
+      <div class="section-head">What did you have?</div>
+      <div class="log-dish-section">
+        <div class="log-dish-chips" id="logDishChips"></div>
+      </div>
+
+      <div class="section-head">Quick note (optional)</div>
+      <textarea class="log-note" placeholder="e.g. 'The fried rice is incredible'"></textarea>
+
+      <div class="ctas" style="margin-top:16px;">
+        <button class="cta primary" onclick="saveLog()">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script>
+// ── PICK DATA ──
+const picks = [
+  {
+    name: 'Boiling Beijing',
+    cuisine: 'Chinese · Flushing · $$',
+    dishes: [
+      { emoji: '🍳', name: 'Fried rice', people: 'Puneet ❤️ · Aditya ❤️', note: 'Puneet: "Order this before anything else"', primary: true },
+      { emoji: '🌶️', name: 'Mapo tofu', people: 'Puneet ❤️', note: null, primary: false },
+      { emoji: '🥔', name: 'Griddle potatoes', people: 'Pragya ❤️', note: 'Pragya: "Addictive"', primary: false },
+      { emoji: '🫘', name: 'Green beans', people: 'Pragya 👍', note: null, primary: false },
+    ],
+    reason: 'Start with <span class="accent">the fried rice</span>. Three people in your table have been here and between them they\'ve tried most of the menu.',
+    trustLine: 'Puneet, Pragya & Aditya liked it',
+    heroDishes: ['🍳 Fried rice', '🌶️ Mapo tofu', '🥔 Griddle potatoes'],
+    moreCount: 1,
+  },
+  {
+    name: 'Don Angie',
+    cuisine: 'Italian · West Village',
+    dishes: [
+      { emoji: '🍝', name: 'Carbonara', people: 'Pragya ❤️', note: 'Pragya: "Best in NYC"', primary: true },
+      { emoji: '🥗', name: 'Chrysanthemum salad', people: 'Jay 👍', note: null, primary: false },
+    ],
+    reason: 'Get <span class="accent">the carbonara</span>. Pragya loved it and Jay went last week too.',
+    trustLine: 'Pragya & Jay liked it',
+    heroDishes: ['🍝 Carbonara', '🥗 Chrysanthemum salad'],
+    moreCount: 0,
+  },
+  {
+    name: 'Dosa Kitchen',
+    cuisine: 'South Indian · East Village',
+    dishes: [
+      { emoji: '🫓', name: 'Masala dosa', people: 'Puneet ❤️', note: 'Puneet: "Best dosa in the city"', primary: true },
+    ],
+    reason: 'Get <span class="accent">the masala dosa</span>. Puneet loved it.',
+    trustLine: 'Puneet loved it',
+    heroDishes: ['🫓 Masala dosa'],
+    moreCount: 0,
+  },
+  {
+    name: 'Hav & Mar',
+    cuisine: 'Seafood · Chelsea',
+    dishes: [
+      { emoji: '🍖', name: 'Lamb', people: 'Jay ❤️', note: null, primary: true },
+      { emoji: '🦪', name: 'Oysters', people: 'Jay ❤️', note: 'Jay: "Get a dozen"', primary: false },
+    ],
+    reason: 'Get <span class="accent">the lamb</span>. Jay has been 3 times and orders it every time.',
+    trustLine: 'Jay loved 2 dishes',
+    heroDishes: ['🍖 Lamb', '🦪 Oysters'],
+    moreCount: 0,
+  },
+  {
+    name: 'Tatiana Bar',
+    cuisine: 'Cocktails · West Village',
+    dishes: [
+      { emoji: '🍸', name: 'Martini', people: 'Ankita ❤️', note: null, primary: true },
+    ],
+    reason: 'Try <span class="accent">the martini</span>. Ankita saves this spot for date night.',
+    trustLine: "Ankita's date night pick",
+    heroDishes: ['🍸 Martini'],
+    moreCount: 0,
+  }
+];
+
+let currentHeroIdx = 0;
+let availablePicks = [...picks];
+let plannedList = [];
+
+function renderHero() {
+  const hero = document.getElementById('heroCard');
+  const eyebrow = document.getElementById('heroEyebrow');
+  const empty = document.getElementById('emptyState');
+  const carouselEye = document.getElementById('carouselEyebrow');
+  const carousel = document.getElementById('carousel');
+
+  if (availablePicks.length === 0) {
+    hero.style.display = 'none';
+    eyebrow.style.display = 'none';
+    carouselEye.style.display = 'none';
+    carousel.style.display = 'none';
+    empty.classList.add('show');
+    return;
+  }
+
+  empty.classList.remove('show');
+  hero.style.display = '';
+  eyebrow.style.display = '';
+
+  const pick = availablePicks[0];
+
+  let dishesHtml = '<div class="dishes">';
+  pick.heroDishes.forEach((d, i) => {
+    const parts = d.split(' ');
+    const emoji = parts[0];
+    const name = parts.slice(1).join(' ');
+    dishesHtml += `<div class="dish-line ${i === 0 ? 'primary' : ''}"><span class="emoji">${emoji}</span><span class="name">${name}</span></div>`;
+  });
+  dishesHtml += '</div>';
+  if (pick.moreCount > 0) {
+    dishesHtml += `<div class="dish-more">+${pick.moreCount} more dish</div>`;
+  }
+
+  hero.innerHTML = `
+    <div class="place-name">${pick.name}</div>
+    <div class="place-meta">${pick.cuisine}</div>
+    ${dishesHtml}
+    <div class="trust-line">${pick.trustLine}</div>
+  `;
+
+  // Render carousel (remaining picks)
+  if (availablePicks.length > 1) {
+    carouselEye.style.display = '';
+    carousel.style.display = '';
+    carousel.innerHTML = '';
+    for (let i = 1; i < availablePicks.length; i++) {
+      const p = availablePicks[i];
+      const firstDish = p.heroDishes[0] || '';
+      const parts = firstDish.split(' ');
+      const dishText = parts.slice(1).join(' ');
+      const card = document.createElement('div');
+      card.className = 'pick';
+      card.onclick = () => { promoteToHero(i); };
+      card.innerHTML = `
+        <div class="pick-place">${p.name}</div>
+        <div class="pick-dish">${dishText} · ${p.trustLine}</div>
+        <div class="pick-meta">${p.cuisine}</div>
+      `;
+      carousel.appendChild(card);
+    }
+  } else {
+    carouselEye.style.display = 'none';
+    carousel.style.display = 'none';
+  }
+}
+
+function promoteToHero(idx) {
+  // Move selected carousel pick to front
+  const pick = availablePicks.splice(idx, 1)[0];
+  availablePicks.unshift(pick);
+  renderHero();
+}
+
+function openSheet() {
+  if (availablePicks.length === 0) return;
+  const pick = availablePicks[0];
+
+  // Reset to recommendation view
+  document.getElementById('sheetRec').style.display = '';
+  document.getElementById('logFlow').classList.remove('show');
+
+  document.getElementById('sheetPlace').textContent = pick.name;
+  document.getElementById('sheetCuisine').textContent = pick.cuisine;
+  document.getElementById('sheetReason').innerHTML = pick.reason;
+
+  const dishesEl = document.getElementById('sheetDishes');
+  dishesEl.innerHTML = '';
+  pick.dishes.forEach(d => {
+    const nameStyle = d.primary
+      ? 'font-size:16px;font-weight:700;background:linear-gradient(135deg,#ffb089,#ff6fae);-webkit-background-clip:text;background-clip:text;color:transparent;'
+      : 'font-size:16px;font-weight:700;color:#e6e6ea;';
+    let html = `<div class="take-row"><div class="take-content">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+        <span style="font-size:18px">${d.emoji}</span>
+        <span style="${nameStyle}">${d.name}</span>
+      </div>
+      <div style="font-size:13px;color:#b8b8be;">${d.people}</div>`;
+    if (d.note) {
+      html += `<div style="font-size:12px;color:#8e8e93;font-style:italic;margin-top:3px;">${d.note}</div>`;
+    }
+    html += '</div></div>';
+    dishesEl.innerHTML += html;
+  });
+
+  document.getElementById('sheetBack').classList.add('show');
+}
+
+function closeSheet() {
+  document.getElementById('sheetBack').classList.remove('show');
+}
+
+// ── CTA: GO HERE ──
+function ctaGoHere() {
+  const pick = availablePicks.shift();
+  plannedList.push(pick);
+
+  closeSheet();
+
+  // Show planned strip
+  document.getElementById('plannedName').textContent = pick.name;
+  document.getElementById('plannedStrip').classList.add('show');
+
+  // Animate hero transition
+  const hero = document.getElementById('heroCard');
+  hero.classList.add('exit');
+
+  setTimeout(() => {
+    renderHero();
+    hero.classList.remove('exit');
+    hero.classList.add('enter');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        hero.classList.remove('enter');
+      });
+    });
+  }, 350);
+
+  showToast('Planned — we\'ll check in later');
+}
+
+// ── CTA: I WENT HERE ──
+function ctaIWentHere() {
+  const pick = availablePicks[0];
+
+  // Transform sheet: hide rec, show log flow
+  document.getElementById('sheetRec').style.display = 'none';
+  const logFlow = document.getElementById('logFlow');
+  logFlow.classList.add('show');
+
+  document.getElementById('logPlace').textContent = pick.name;
+  document.getElementById('logCuisine').textContent = pick.cuisine;
+
+  // Populate dish chips from pick data
+  const chips = document.getElementById('logDishChips');
+  chips.innerHTML = '';
+  pick.dishes.forEach(d => {
+    const chip = document.createElement('div');
+    chip.className = 'log-dish-chip';
+    chip.textContent = d.emoji + ' ' + d.name;
+    chip.onclick = () => chip.classList.toggle('selected');
+    chips.appendChild(chip);
+  });
+
+  // Reset reactions
+  document.querySelectorAll('.reaction').forEach(r => r.classList.remove('selected'));
+}
+
+function selectReaction(el) {
+  document.querySelectorAll('.reaction').forEach(r => r.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+function saveLog() {
+  availablePicks.shift();
+  closeSheet();
+
+  // Reset log flow state
+  document.getElementById('logFlow').classList.remove('show');
+
+  const hero = document.getElementById('heroCard');
+  hero.classList.add('exit');
+
+  setTimeout(() => {
+    renderHero();
+    hero.classList.remove('exit');
+    hero.classList.add('enter');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        hero.classList.remove('enter');
+      });
+    });
+  }, 350);
+
+  showToast('Logged — your table will see this');
+}
+
+// ── CTA: SAVE FOR LATER ──
+function ctaSaveForLater() {
+  availablePicks.shift();
+  closeSheet();
+
+  const hero = document.getElementById('heroCard');
+  hero.classList.add('exit');
+
+  setTimeout(() => {
+    renderHero();
+    hero.classList.remove('exit');
+    hero.classList.add('enter');
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        hero.classList.remove('enter');
+      });
+    });
+  }, 350);
+
+  showToast('Saved to Want to try');
+}
+
+// ── UTILITIES ──
+let toastTimer;
+function showToast(msg) {
+  document.getElementById('toastMsg').textContent = msg;
+  document.getElementById('toast').classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => document.getElementById('toast').classList.remove('show'), 3000);
+}
+
+function resetAll() {
+  availablePicks = [...picks];
+  plannedList = [];
+  document.getElementById('plannedStrip').classList.remove('show');
+  document.getElementById('emptyState').classList.remove('show');
+  renderHero();
+}
+
+document.querySelectorAll('.moment').forEach(m => {
+  m.addEventListener('click', () => {
+    document.querySelectorAll('.moment').forEach(x => x.classList.remove('active'));
+    m.classList.add('active');
+  });
+});
+
+// Initial render
+renderHero();
+</script>
+</body>
+</html>

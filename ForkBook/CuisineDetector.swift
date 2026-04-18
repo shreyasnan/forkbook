@@ -18,6 +18,18 @@ struct CuisineDetector {
             }
         }
 
+        // Fallback: check if restaurant is in our DB and infer from known dish names
+        if let dishes = RestaurantDishDB.lookup(name) {
+            let dishText = dishes.joined(separator: " ").lowercased()
+            for (cuisine, keywords) in cuisineKeywords {
+                var matchCount = 0
+                for keyword in keywords {
+                    if dishText.contains(keyword) { matchCount += 1 }
+                }
+                if matchCount >= 2 { return cuisine }
+            }
+        }
+
         return nil
     }
 

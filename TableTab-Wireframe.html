@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>ForkBook — Table tab wireframe</title>
+<style>
+  :root {
+    --bg:#000;
+    --card:#131517;
+    --cardHero:#171A1D;
+    --text:#F5F5F7;
+    --muted:#8E8E93;
+    --dim:#6B6B70;
+    --line: rgba(255,255,255,0.06);
+    --warm:#C4A882;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin:0; padding:0;
+    background:#0A0A0A;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif;
+    color: var(--text);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 40px 24px 80px;
+    display: grid;
+    grid-template-columns: 390px 1fr;
+    gap: 48px;
+    align-items: start;
+  }
+  @media (max-width: 860px) {
+    .page { grid-template-columns: 1fr; }
+  }
+  h1.brand {
+    font-size: 14px;
+    letter-spacing: 1.4px;
+    font-weight: 700;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin: 0 0 14px;
+  }
+  .phone {
+    width: 390px;
+    height: 844px;
+    background: var(--bg);
+    border-radius: 44px;
+    overflow: hidden;
+    position: relative;
+    border: 1px solid #1e1e22;
+    box-shadow: 0 30px 80px rgba(0,0,0,0.6);
+  }
+  .status {
+    height: 44px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 24px;
+    font-size: 12px;
+    color: var(--muted);
+  }
+  .scroll {
+    height: calc(100% - 44px - 84px);
+    overflow-y: auto;
+    padding: 8px 20px 28px;
+  }
+  .tabbar {
+    position: absolute;
+    bottom:0; left:0; right:0;
+    height: 84px;
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    display: grid;
+    grid-template-columns: repeat(4,1fr);
+    padding-top: 10px;
+  }
+  .tabbar .t { display:flex; flex-direction:column; align-items:center; gap:4px; font-size:10px; color: var(--dim); }
+  .tabbar .t.on { color: var(--text); }
+  .tabbar .dot { width:22px; height:22px; border-radius:6px; background: rgba(255,255,255,0.08); }
+  .tabbar .on .dot { background: rgba(255,255,255,0.18); }
+
+  /* header */
+  .head {
+    display:flex; align-items:flex-start; justify-content:space-between;
+    padding: 14px 2px 22px;
+  }
+  .head h1 {
+    font-size: 26px; font-weight: 800; letter-spacing:-0.5px; margin:0;
+  }
+  .head p {
+    font-size: 13px; color: var(--muted); margin: 4px 0 0;
+  }
+  .gear {
+    width: 36px; height:36px;
+    border-radius: 50%;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--line);
+    display:flex; align-items:center; justify-content:center;
+    color: var(--muted);
+    font-size: 15px;
+  }
+
+  /* section label */
+  .slabel {
+    font-size: 11px; font-weight: 700;
+    letter-spacing: 1.4px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin: 4px 0 12px;
+  }
+
+  /* hero convergence */
+  .hero {
+    position: relative;
+    background: var(--cardHero);
+    border: 1px solid rgba(196,168,130,0.22);
+    border-radius: 20px;
+    padding: 18px 18px 20px;
+    overflow: hidden;
+  }
+  .hero::before {
+    content:"";
+    position:absolute; inset:0;
+    background: radial-gradient(120% 80% at 0% 0%, rgba(196,168,130,0.10), transparent 55%);
+    pointer-events:none;
+  }
+  .hero .tag {
+    display:inline-block;
+    font-size: 10.5px; font-weight:700;
+    letter-spacing: 1.3px;
+    text-transform: uppercase;
+    color: var(--warm);
+    background: rgba(196,168,130,0.12);
+    border: 1px solid rgba(196,168,130,0.3);
+    border-radius: 999px;
+    padding: 4px 10px;
+    margin-bottom: 14px;
+  }
+  .hero h2 {
+    font-size: 22px; font-weight: 800; margin: 0 0 6px;
+    letter-spacing: -0.3px;
+  }
+  .hero .dish { font-size: 14px; color: var(--muted); margin: 0 0 14px; }
+  .convo {
+    display:flex; align-items:center; gap:10px;
+    font-size: 12.5px; color: var(--text); font-weight: 500;
+  }
+  .avatars { display:flex; }
+  .av {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: rgba(196,168,130,0.16);
+    border: 1.5px solid var(--cardHero);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 10px; font-weight: 700; color: var(--warm);
+    margin-left: -6px;
+  }
+  .av:first-child { margin-left: 0; }
+  .convo em { font-style: normal; color: var(--warm); font-weight: 600; }
+
+  /* trusted lane cards */
+  .lane { margin-top: 28px; }
+  .tcard {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 14px 14px 14px 14px;
+    display: flex; gap: 14px;
+    margin-bottom: 10px;
+  }
+  .tcard .thumb {
+    width: 56px; height: 56px; border-radius: 10px;
+    background: linear-gradient(135deg, #2a2a2e, #1a1a1d);
+    flex-shrink: 0;
+    border: 1px solid var(--line);
+  }
+  .tcard .body { flex:1; min-width: 0; }
+  .tcard h3 {
+    font-size: 15px; font-weight: 700; margin:0 0 2px;
+  }
+  .tcard .meta {
+    font-size: 12.5px; color: var(--muted); margin: 0 0 6px;
+  }
+  .tcard .proof {
+    display:flex; align-items:center; gap:8px;
+    font-size: 12px; color: var(--warm);
+    font-weight: 500;
+  }
+  .pav {
+    width: 20px; height: 20px; border-radius: 50%;
+    background: rgba(196,168,130,0.14);
+    border: 1px solid rgba(196,168,130,0.3);
+    display:flex; align-items:center; justify-content:center;
+    font-size: 9.5px; font-weight:700; color: var(--warm);
+  }
+  .proof .agree { color: var(--dim); font-weight: 500; }
+
+  /* worth adding list */
+  .addlist {
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+  .arow {
+    display:flex; align-items:center; gap: 12px;
+    padding: 12px 14px;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .arow:last-child { border-bottom: none; }
+  .arow .pav.small { width: 22px; height: 22px; font-size: 10px; }
+  .arow .txt { flex:1; min-width: 0; }
+  .arow .name { font-size: 14px; font-weight: 600; }
+  .arow .sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .arow .add {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: rgba(196,168,130,0.12);
+    border: 1px solid rgba(196,168,130,0.28);
+    color: var(--warm);
+    font-size: 15px; font-weight: 600;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* annotations */
+  .notes h1.brand { margin-bottom: 24px; }
+  .note {
+    border-left: 2px solid var(--warm);
+    padding: 4px 0 4px 16px;
+    margin-bottom: 26px;
+  }
+  .note h3 {
+    font-size: 14px; letter-spacing:0.5px; font-weight: 700;
+    color: var(--text); text-transform: uppercase;
+    margin: 0 0 6px;
+  }
+  .note p {
+    margin: 0; font-size: 14px; line-height: 1.55;
+    color: #c9c9cd;
+  }
+  .note .why {
+    font-size: 12.5px; color: var(--muted);
+    margin-top: 6px; font-style: italic;
+  }
+
+  /* scrollbar hide */
+  .scroll::-webkit-scrollbar { display: none; }
+  .scroll { scrollbar-width: none; }
+</style>
+</head>
+<body>
+  <div class="page">
+
+    <!-- PHONE WIREFRAME -->
+    <div>
+      <h1 class="brand">Table tab — reframed</h1>
+      <div class="phone">
+        <div class="status">
+          <span>9:41</span>
+          <span>•••</span>
+        </div>
+
+        <div class="scroll">
+          <!-- Header -->
+          <div class="head">
+            <div>
+              <h1>Table</h1>
+              <p>Places your table vouches for</p>
+            </div>
+            <div class="gear">⚙</div>
+          </div>
+
+          <!-- HERO: convergence -->
+          <div class="slabel">Strongest signal this week</div>
+          <div class="hero">
+            <span class="tag">2 of your table</span>
+            <h2>Flour + Water</h2>
+            <p class="dish">Hayes Valley · Italian · dinner</p>
+            <div class="convo">
+              <div class="avatars">
+                <div class="av">M</div>
+                <div class="av">L</div>
+              </div>
+              <div>
+                <em>Maya</em> and <em>Lena</em> both saved this · you agreed on 7 of their picks
+              </div>
+            </div>
+          </div>
+
+          <!-- From your most-trusted -->
+          <div class="lane">
+            <div class="slabel">From your most-trusted</div>
+
+            <div class="tcard">
+              <div class="thumb"></div>
+              <div class="body">
+                <h3>Ju-Ni</h3>
+                <p class="meta">Omakase · Hayes Valley</p>
+                <div class="proof">
+                  <div class="pav">P</div>
+                  <span><em style="color:var(--warm); font-style:normal; font-weight:600">Priya's pick</em> <span class="agree">· you've liked 9 of hers</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tcard">
+              <div class="thumb"></div>
+              <div class="body">
+                <h3>Dosa Point</h3>
+                <p class="meta">Masala Dosa · Sunnyvale</p>
+                <div class="proof">
+                  <div class="pav">R</div>
+                  <span><em style="color:var(--warm); font-style:normal; font-weight:600">Raj went back</em> <span class="agree">· 7 agreed picks</span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="tcard">
+              <div class="thumb"></div>
+              <div class="body">
+                <h3>Cotogna</h3>
+                <p class="meta">Italian · Jackson Square</p>
+                <div class="proof">
+                  <div class="pav">A</div>
+                  <span><em style="color:var(--warm); font-style:normal; font-weight:600">Ankit booked this for 6</em> <span class="agree">· 5 agreed picks</span></span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Worth adding -->
+          <div class="lane">
+            <div class="slabel">Worth adding to your list</div>
+            <div class="addlist">
+              <div class="arow">
+                <div class="pav small">M</div>
+                <div class="txt">
+                  <div class="name">Tartine Manufactory</div>
+                  <div class="sub">Maya saved · morning bun</div>
+                </div>
+                <div class="add">+</div>
+              </div>
+              <div class="arow">
+                <div class="pav small">S</div>
+                <div class="txt">
+                  <div class="name">Orenchi Ramen</div>
+                  <div class="sub">Sam saved · late-night</div>
+                </div>
+                <div class="add">+</div>
+              </div>
+              <div class="arow">
+                <div class="pav small">L</div>
+                <div class="txt">
+                  <div class="name">b. patisserie</div>
+                  <div class="sub">Lena recommended</div>
+                </div>
+                <div class="add">+</div>
+              </div>
+              <div class="arow">
+                <div class="pav small">P</div>
+                <div class="txt">
+                  <div class="name">Akiko's Sushi Bar</div>
+                  <div class="sub">Priya saved</div>
+                </div>
+                <div class="add">+</div>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Tab bar -->
+        <div class="tabbar">
+          <div class="t"><div class="dot"></div>Home</div>
+          <div class="t"><div class="dot"></div>Search</div>
+          <div class="t"><div class="dot"></div>My Places</div>
+          <div class="t on"><div class="dot"></div>Table</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ANNOTATIONS -->
+    <div class="notes">
+      <h1 class="brand">What's changing & why</h1>
+
+      <div class="note">
+        <h3>Subtitle shift</h3>
+        <p>"People whose taste you trust" → "Places your table vouches for."</p>
+        <div class="why">Signals the tab is about picks, not profiles.</div>
+      </div>
+
+      <div class="note">
+        <h3>People moved to a gear icon</h3>
+        <p>The 6-person list, trust map, and invite CTA all move into a "Manage your table" sheet behind the ⚙ top-right. They're settings for the engine, not the content.</p>
+        <div class="why">Frees the main surface for decisions, keeps the social layer one tap away when you actually want it.</div>
+      </div>
+
+      <div class="note">
+        <h3>Hero = convergence</h3>
+        <p>Top card leads with the rarest, strongest signal your table produces: multiple trusted people pointing at the same place. If no convergence this week, fallback is the single highest-trust pick.</p>
+        <div class="why">This is the signal only your app can produce. It deserves the biggest pixel.</div>
+      </div>
+
+      <div class="note">
+        <h3>"From your most-trusted"</h3>
+        <p>3 cards, one dish/place each, ranked by your historical agreement rate with the person — not recency. Proof line is short and warm-accented: name + agreement count.</p>
+        <div class="why">Same decision-card shape as Home, but weighted through the trust graph instead of editorial curation.</div>
+      </div>
+
+      <div class="note">
+        <h3>"Worth adding to your list"</h3>
+        <p>Compact list of saves you haven't logged. One-tap + button adds to My Places. No card chrome — it's a lightweight queue, not a browsing surface.</p>
+        <div class="why">Makes the table productive: things to act on, not things to scroll through.</div>
+      </div>
+
+      <div class="note">
+        <h3>What's gone</h3>
+        <p>No feed. No "Recent from your table" activity stream. No person-cards as primary content. No trust matrix as a visible row.</p>
+        <div class="why">Those are social-network patterns. The app's edge is editorial, decision-first, and quiet.</div>
+      </div>
+
+    </div>
+  </div>
+</body>
+</html>

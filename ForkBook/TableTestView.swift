@@ -3,10 +3,9 @@ import FirebaseAuth
 
 // MARK: - Table Test View (V4 — Utility First, real data)
 //
-// Three sections:
-//   1. Trust for…        -- occasion → trusted person
-//   2. Your people       -- compact rows, derived descriptor + hint
-//   3. Changed confidence -- recent table activity
+// Two sections:
+//   1. Trust for…   -- occasion → trusted person
+//   2. Your people  -- compact rows, derived descriptor + hint
 //
 // Backed by Firestore circle members + SharedRestaurants.
 
@@ -43,7 +42,6 @@ struct TableTestView: View {
 
                     let trust = trustMap
                     let people = derivedPeople
-                    let changes = derivedSignals
 
                     if !trust.isEmpty {
                         trustForSection(trust)
@@ -55,11 +53,6 @@ struct TableTestView: View {
                             .padding(.horizontal, 20)
                     } else {
                         emptyPeopleState
-                            .padding(.horizontal, 20)
-                    }
-
-                    if !changes.isEmpty {
-                        changedConfidenceSection(changes)
                             .padding(.horizontal, 20)
                     }
 
@@ -187,27 +180,6 @@ struct TableTestView: View {
             .buttonStyle(TableCardPressStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: Section 3 — Changed confidence
-
-    private func changedConfidenceSection(_ signals: [ConfidenceSignal]) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            sectionLabel("CHANGED CONFIDENCE")
-
-            VStack(spacing: 0) {
-                ForEach(Array(signals.enumerated()), id: \.offset) { index, item in
-                    ConfidenceRow(signal: item)
-
-                    if index < signals.count - 1 {
-                        Rectangle()
-                            .fill(Color.white.opacity(0.04))
-                            .frame(height: 0.5)
-                            .padding(.leading, 12)
-                    }
-                }
-            }
-        }
     }
 
     // MARK: Helpers
@@ -349,7 +321,7 @@ struct TableTestView: View {
     }
 
     private func descriptorText(for entries: [SharedRestaurant]) -> String {
-        guard !entries.isEmpty else { return "No places logged yet." }
+        guard !entries.isEmpty else { return "No places yet." }
 
         // Top cuisines
         let cuisineCounts = Dictionary(grouping: entries.filter { $0.cuisine != .other }, by: { $0.cuisine })
@@ -359,14 +331,14 @@ struct TableTestView: View {
         if let top = cuisineCounts.first, cuisineCounts.count >= 2 {
             let second = cuisineCounts[1]
             if top.value >= 2 && second.value >= 2 {
-                return "Dependable for \(top.key.rawValue.lowercased()) and \(second.key.rawValue.lowercased())."
+                return "\(top.key.rawValue) · \(second.key.rawValue)"
             }
-            return "Strong on \(top.key.rawValue.lowercased())."
+            return top.key.rawValue
         }
         if let top = cuisineCounts.first {
-            return "Strong on \(top.key.rawValue.lowercased())."
+            return top.key.rawValue
         }
-        return "Has logged \(entries.count) place\(entries.count == 1 ? "" : "s")."
+        return "\(entries.count) place\(entries.count == 1 ? "" : "s") logged"
     }
 
     private func hintText(member: FirestoreService.CircleMember, entries: [SharedRestaurant]) -> String {
@@ -396,124 +368,6 @@ struct TableTestView: View {
         return "Useful when you want something new."
     }
 
-    /// Recent table activity → scored confidence signals.
-    /// Signal types scored by interestingness + recency:
-    ///  - Dish consensus (≥2 members love same dish at same place) — highest
-    ///  - Friend repeat visit (visitCount >= 2)
-    ///  - Friend 5-star / go-to equivalent
-    ///  - Overlap with your log (friend tried a place you also have)
-    ///  - Fresh log
-    private var derivedSignals: [ConfidenceSignal] {
-        let myNames = Set(store.restaurants.map { $0.name.lowercased() })
-        let byPlace = Dictionary(grouping: friendEntries, by: { $0.name.lowercased() })
-
-        struct ScoredSignal {
-            let signal: ConfidenceSignal
-            let score: Int
-            let date: Date
-        }
-
-        var out: [ScoredSignal] = []
-
-        // Dish consensus per place
-        for (_, entries) in byPlace {
-            guard let ref = entries.first else { continue }
-            let dishVotes = entries.flatMap { $0.likedDishes.map { $0.name.lowercased() } }
-            let counts = Dictionary(grouping: dishVotes, by: { $0 })
-                .mapValues { $0.count }
-                .filter { $0.value >= 2 }
-                .sorted { $0.value > $1.value }
-
-            if let top = counts.first {
-                let latest = entries.compactMap { $0.dateVisited }.max() ?? Date.distantPast
-                let recencyBoost = daysAgo(latest) <= 14 ? 10 : 0
-                out.append(ScoredSignal(
-                    signal: ConfidenceSignal(
-                        name: "Table consensus",
-                        action: "\(top.value) at your table love the \(top.key) at",
-                        place: ref.name,
-                        timeAgo: timeAgo(latest)
-                    ),
-                    score: 25 + recencyBoost,
-                    date: latest
-                ))
-            }
-        }
-
-        // Per-entry signals
-        for r in friendEntries {
-            guard let d = r.dateVisited else { continue }
-            let days = daysAgo(d)
-            let name = shortName(r.userName)
-            let isOverlap = myNames.contains(r.name.lowercased())
-
-            let action: String
-            var score: Int
-
-            if r.rating >= 5, let topDish = r.likedDishes.first?.name {
-                action = "loved the \(topDish.lowercased()) at"
-                score = 22
-            } else if r.rating >= 5 {
-                action = "loved"
-                score = 18
-            } else if r.visitCount >= 2 {
-                action = "went back to"
-                score = 20
-            } else if isOverlap {
-                action = "also logged"
-                score = 14
-            } else if r.rating >= 3 {
-                action = "logged"
-                score = 8
-            } else {
-                action = "tried"
-                score = 5
-            }
-
-            if days <= 3 { score += 8 }
-            else if days <= 7 { score += 5 }
-            else if days <= 14 { score += 2 }
-
-            out.append(ScoredSignal(
-                signal: ConfidenceSignal(
-                    name: name,
-                    action: action,
-                    place: r.name,
-                    timeAgo: timeAgo(d)
-                ),
-                score: score,
-                date: d
-            ))
-        }
-
-        // Dedup by (name|place) keeping highest score
-        var seen: [String: ScoredSignal] = [:]
-        for s in out {
-            let key = "\(s.signal.name.lowercased())|\(s.signal.place.lowercased())"
-            if let existing = seen[key], existing.score >= s.score { continue }
-            seen[key] = s
-        }
-
-        return seen.values
-            .sorted { ($0.score, $0.date) > ($1.score, $1.date) }
-            .prefix(4)
-            .map { $0.signal }
-    }
-
-    private func daysAgo(_ date: Date) -> Int {
-        Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 999
-    }
-
-    private func timeAgo(_ date: Date?) -> String {
-        guard let date else { return "" }
-        let days = Calendar.current.dateComponents([.day], from: date, to: Date()).day ?? 0
-        if days <= 0 { return "today" }
-        if days == 1 { return "1d" }
-        if days < 7 { return "\(days)d" }
-        if days < 30 { return "\(days / 7)w" }
-        return "\(days / 30)mo"
-    }
-
     private func shortName(_ full: String) -> String {
         full.components(separatedBy: " ").first ?? full
     }
@@ -531,13 +385,6 @@ private struct TablePerson {
 private struct TrustPair {
     let category: String
     let person: String
-}
-
-private struct ConfidenceSignal {
-    let name: String
-    let action: String
-    let place: String
-    let timeAgo: String
 }
 
 // MARK: - Trust Shortcut Row (section 1)
@@ -629,46 +476,6 @@ private struct CompactPersonRow: View {
                 .foregroundStyle(Color.fbWarm)
         }
         .frame(width: 34, height: 34)
-    }
-}
-
-// MARK: - Confidence Signal Row (section 3)
-
-private struct ConfidenceRow: View {
-    let signal: ConfidenceSignal
-
-    var body: some View {
-        Button {
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                (
-                    Text(signal.name)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color.fbText)
-                    +
-                    Text(" \(signal.action) ")
-                        .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(Color(hex: "8E8E93"))
-                    +
-                    Text(signal.place)
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(Color.fbWarm)
-                )
-                .lineLimit(2)
-                .fixedSize(horizontal: false, vertical: true)
-
-                Spacer(minLength: 8)
-
-                Text(signal.timeAgo)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundStyle(Color(hex: "6B6B70"))
-            }
-            .padding(.vertical, 12)
-            .padding(.horizontal, 12)
-            .contentShape(Rectangle())
-        }
-        .buttonStyle(TableCardPressStyle())
     }
 }
 

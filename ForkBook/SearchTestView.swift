@@ -14,6 +14,12 @@ struct SearchTestView: View {
     @ObservedObject private var firestoreService = FirestoreService.shared
     @ObservedObject private var askService = AskForkBookService.shared
 
+    /// Parent-owned binding to the root tab selection. After the user saves a
+    /// meal via `AddPlaceTestFlow` presented from this view, we route them
+    /// back to Home so they land on an updated recommendations feed rather
+    /// than the empty search state.
+    var selectedTab: Binding<Int>? = nil
+
     @State private var searchText = ""
     @FocusState private var isSearchFocused: Bool
     @State private var tableRestaurants: [SharedRestaurant] = []
@@ -24,6 +30,13 @@ struct SearchTestView: View {
     @State private var toastMessage: String?
     @State private var showToast = false
     @State private var showAddPlace = false
+
+    // Prefill payload for AddPlaceTestFlow when presenting from "I went here"
+    // so the flow jumps straight to "What did you have?" instead of asking
+    // the user to re-pick the place.
+    @State private var logPrefillName = ""
+    @State private var logPrefillAddress = ""
+    @State private var logPrefillCuisine: CuisineType? = nil
 
     // Ask escalation — same pattern as MyPlaces.
     @State private var lastAskedQuery: String? = nil
@@ -55,9 +68,14 @@ struct SearchTestView: View {
         var seen = Set<String>()
 
         for (nameKey, entries) in byName {
+            // Match on: restaurant name, cuisine, dish names, or friend names
+            let friendNames = entries.map {
+                $0.userName.components(separatedBy: " ").first?.lowercased() ?? $0.userName.lowercased()
+            }
             guard nameKey.contains(q)
                     || entries.first?.cuisine.rawValue.lowercased().contains(q) == true
                     || entries.flatMap(\.dishes).contains(where: { $0.name.lowercased().contains(q) })
+                    || friendNames.contains(where: { $0.contains(q) })
             else { continue }
 
             if seen.contains(nameKey) { continue }
@@ -179,14 +197,18 @@ struct SearchTestView: View {
     /// the existing `allTableMatches` flow already renders with rich reasoning.
     private var mineHits: [LocalSearchHit] {
         guard searchText.count >= 2 else { return [] }
+        // Pass real table data so friend-name and dish queries work through
+        // the full search index. Deduplicate against allTableMatches so we
+        // don't show the same restaurant twice.
+        let tableMatchNames = Set(allTableMatches.map { $0.name.lowercased() })
         let all = LocalSearchIndex.search(
             query: searchText,
             myRestaurants: store.restaurants,
-            tableRestaurants: [],            // table covered by allTableMatches
+            tableRestaurants: tableRestaurants,
             currentUid: currentUid,
-            limit: 4
+            limit: 8
         )
-        return all
+        return all.filter { !tableMatchNames.contains($0.name.lowercased()) }
     }
 
     private var shouldShowAskRow: Bool {
@@ -242,12 +264,12 @@ struct SearchTestView: View {
                 if showToast, let message = toastMessage {
                     VStack {
                         Spacer()
-                        FBToast(message: message)
-                            .transition(.opacity)
+                        FBToast(message: message, style: .prominent)
+                            .transition(.opacity.combined(with: .move(edge: .bottom)))
                             .padding(.bottom, 90)
                     }
                     .onAppear {
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
                             withAnimation { showToast = false }
                         }
                     }
@@ -257,9 +279,23 @@ struct SearchTestView: View {
             .sheet(item: $selectedDetail) { detail in
                 searchDetailSheet(detail)
             }
-            .sheet(isPresented: $showAddPlace) {
-                AddPlaceTestFlow()
+            .sheet(isPresented: $showAddPlace, onDismiss: {
+                logPrefillName = ""
+                logPrefillAddress = ""
+                logPrefillCuisine = nil
+            }) {
+                AddPlaceTestFlow(
+                    prefillName: logPrefillName.isEmpty ? nil : logPrefillName,
+                    prefillAddress: logPrefillAddress.isEmpty ? nil : logPrefillAddress,
+                    prefillCuisine: logPrefillCuisine,
+                    onComplete: {
+                        // Route back to Home so the user lands on an updated
+                        // recommendations feed after logging from Search.
+                        selectedTab?.wrappedValue = 0
+                    }
+                )
                     .environmentObject(store)
+                    .id(logPrefillName)   // force a fresh view so prefill onAppear fires
             }
             .task { await loadTableData() }
             .onChange(of: searchText) { newValue in
@@ -287,6 +323,7 @@ struct SearchTestView: View {
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
+                    isSearchFocused = false
                 } label: {
                     Image(systemName: "xmark.circle.fill")
                         .foregroundStyle(Self.dimGray)
@@ -312,14 +349,10 @@ struct SearchTestView: View {
 
     private var preSearchState: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Quick mood chips instead of generic shortcuts
-            Text("WHAT SOUNDS GOOD?")
-                .font(.system(size: 11, weight: .bold))
-                .tracking(1.4)
-                .foregroundStyle(Self.mutedGray)
-                .padding(.horizontal, 20)
-                .padding(.top, 24)
-                .padding(.bottom, 14)
+            // Quick mood chips instead of generic shortcuts. The search-bar
+            // placeholder ("What are you in the mood for?") already poses
+            // the question, so no redundant section heading is needed.
+            Spacer().frame(height: 20)
 
             LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
                 ForEach(moodChips, id: \.query) { chip in
@@ -740,16 +773,15 @@ struct SearchTestView: View {
     // =========================================================================
 
     private var noResultsState: some View {
-        VStack(spacing: 14) {
+        VStack(spacing: 10) {
             Spacer(minLength: 60)
-            Text("Nothing from your table")
+            Text("No matches")
                 .font(.system(size: 17, weight: .bold))
                 .foregroundStyle(Color.fbText)
-            Text("No one in your table has logged a match.\nTry a different dish, cuisine, or neighborhood.")
+            Text("Try a different dish or cuisine.")
                 .font(.system(size: 14))
                 .foregroundStyle(Self.mutedGray)
                 .multilineTextAlignment(.center)
-                .lineSpacing(4)
             Spacer()
         }
         .padding(.horizontal, 20)
@@ -820,8 +852,14 @@ struct SearchTestView: View {
                         // Primary: Go here
                         Button {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            showToastMessage("Added to your plan")
                             selectedDetail = nil
+                            // Wait for the detail sheet to dismiss so the
+                            // toast isn't hidden behind it, then show clear
+                            // signal that the place is noted + a reminder
+                            // will come after the visit.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                                showToastMessage("Noted \u{2014} we\u{2019}ll check in after your visit")
+                            }
                         } label: {
                             Text("Go here")
                                 .font(.system(size: 16, weight: .bold))
@@ -843,8 +881,12 @@ struct SearchTestView: View {
                         // Secondary: I went here
                         Button {
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                            prefillLogFromDetail(detail)
                             selectedDetail = nil
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                            // Wait for the detail sheet to finish dismissing
+                            // before presenting the add-place sheet, otherwise
+                            // SwiftUI silently drops the second presentation.
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                                 showAddPlace = true
                             }
                         } label: {
@@ -904,12 +946,14 @@ struct SearchTestView: View {
         totalVisits: Int,
         isRepeat: Bool
     ) -> String {
-        // Prioritize repeat behavior
+        // Prioritize repeat behavior. The top dish is already rendered as
+        // the card's bold heading, so the reasoning line refers back with
+        // "this" rather than naming the dish a second time.
         if isRepeat && !topDish.isEmpty {
             if let name = names.first, names.count == 1 {
-                return "\(name) keeps ordering the \(topDish)"
+                return "\(name) keeps ordering this"
             }
-            return "Your table keeps ordering the \(topDish)"
+            return "Your table keeps ordering this"
         }
 
         // Dish consensus
@@ -979,6 +1023,36 @@ struct SearchTestView: View {
         }
 
         return ("Worth exploring", .generic)
+    }
+
+    /// Populate the log-prefill state from a tapped detail so that
+    /// AddPlaceTestFlow can skip its pick-place step and land the user
+    /// directly on "What did you have?" with the right restaurant loaded.
+    private func prefillLogFromDetail(_ detail: SearchDetailData) {
+        logPrefillName = detail.name
+        let nameKey = detail.name.lowercased()
+
+        // Prefer the user's own saved entry (canonical address + cuisine).
+        if let mine = store.restaurants.first(where: {
+            $0.name.lowercased() == nameKey
+        }) {
+            logPrefillAddress = mine.address
+            logPrefillCuisine = mine.cuisine
+            return
+        }
+        // Otherwise fall back to the table entry data we already have.
+        if let table = tableRestaurants.first(where: {
+            $0.name.lowercased() == nameKey
+        }) {
+            logPrefillAddress = table.address
+            logPrefillCuisine = table.cuisine
+            return
+        }
+        // Best-effort: use the detail's own fields.
+        logPrefillAddress = detail.address
+        logPrefillCuisine = CuisineType.allCases.first(where: {
+            $0.rawValue.caseInsensitiveCompare(detail.cuisine) == .orderedSame
+        })
     }
 
     private func buildDetailData(from match: SearchMatchData) -> SearchDetailData {

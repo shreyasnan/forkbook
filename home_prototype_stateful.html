@@ -1,0 +1,856 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — Home (Stateful)</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #121214;
+    --surface2: #1a1a1d;
+    --border: #26262a;
+    --text: #fff;
+    --muted: #8e8e93;
+    --muted2: #6b6b70;
+    --accent1: #ff7a45;
+    --accent2: #ff2d87;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif;
+    overscroll-behavior: none; }
+
+  .phone {
+    max-width: 400px; margin: 24px auto;
+    background: var(--bg); border-radius: 36px;
+    border: 1px solid #222; overflow: hidden;
+    height: 820px; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  /* ── HOME SCREEN ── */
+  .home-screen {
+    height: 100%; overflow-y: auto;
+    transition: transform .35s ease, opacity .35s ease;
+  }
+  .home-screen.pushed { transform: translateX(-30%) scale(0.92); opacity: 0.3; pointer-events: none; }
+
+  header {
+    padding: 18px 20px 4px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 26px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+  header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+  }
+
+  .moments {
+    display: flex; gap: 8px; padding: 12px 20px 6px; overflow-x: auto; scrollbar-width: none;
+  }
+  .moments::-webkit-scrollbar { display: none; }
+  .moment {
+    flex: 0 0 auto; padding: 8px 14px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .moment.active {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #fff; border-color: transparent;
+  }
+
+  /* Planned strip — commitment card (green tint, not orange) */
+  .planned-strip {
+    margin: 12px 16px 4px;
+    background: rgba(52,199,89,0.06);
+    border: 1px solid rgba(52,199,89,0.18);
+    border-radius: 14px; padding: 12px 16px;
+    display: none; cursor: pointer;
+  }
+  .planned-strip.show { display: flex; align-items: center; justify-content: space-between; }
+  .planned-strip .ps-left { display: flex; flex-direction: column; }
+  .planned-strip .ps-label { font-size: 11px; color: #34c759; font-weight: 700;
+    letter-spacing: 0.5px; margin-bottom: 2px; }
+  .planned-strip .ps-name { font-size: 15px; font-weight: 700; }
+  .planned-strip .ps-dish { font-size: 12px; color: var(--muted); margin-top: 1px; }
+  .planned-strip .ps-arrow { color: #34c759; font-size: 18px; }
+
+  .eyebrow {
+    padding: 20px 20px 10px 22px;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  /* ── HERO ── */
+  .hero-wrap { position: relative; margin: 0 16px 10px; min-height: 190px; }
+  .hero {
+    background:
+      radial-gradient(140% 80% at 0% 0%, rgba(255,122,69,0.16), transparent 60%),
+      radial-gradient(140% 80% at 100% 100%, rgba(255,45,135,0.12), transparent 60%),
+      linear-gradient(160deg, #1a1417, #14171d);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 24px; padding: 22px; cursor: pointer;
+    transition: transform .4s ease, opacity .4s ease;
+  }
+  .hero.exiting { transform: translateX(-110%); opacity: 0; }
+  .hero.entering { animation: slideIn .4s ease forwards; }
+  @keyframes slideIn { from { transform: translateX(60%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  .hero .place-name { font-size: 26px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 2px; }
+  .hero .place-meta { font-size: 13px; color: var(--muted); margin-bottom: 6px; }
+  .hero .context-line { font-size: 13px; color: #a0a0a5; margin-bottom: 12px; }
+  .hero .context-line .ctx-accent { color: var(--accent1); font-weight: 600; }
+  .hero .dishes { display: flex; flex-direction: column; gap: 3px; margin-bottom: 4px; }
+  .hero .dish-line { font-size: 15px; line-height: 1.3; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .hero .dish-line .emoji { font-size: 14px; }
+  .hero .dish-line.primary .name {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .hero .dish-line .name { color: #d6d6da; }
+  .hero .dish-more { font-size: 13px; color: var(--accent1); font-weight: 600; margin-top: 2px; margin-bottom: 6px; }
+  .hero .trust-line { font-size: 14px; color: #b8b8be; }
+
+  /* ── CAROUSEL ── */
+  .carousel {
+    display: flex; gap: 10px; padding: 2px 16px 18px;
+    overflow-x: auto; scroll-snap-type: x mandatory; scrollbar-width: none;
+  }
+  .carousel::-webkit-scrollbar { display: none; }
+  .pick {
+    flex: 0 0 68%; scroll-snap-align: start;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border); border-radius: 16px; padding: 14px; cursor: pointer;
+    transition: all .3s ease;
+  }
+  .pick.removing { transform: scale(0.9); opacity: 0; }
+  .pick .pick-place { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .pick .pick-dish {
+    font-size: 13px; font-weight: 600;
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 2px;
+  }
+  .pick .pick-meta { font-size: 12px; color: var(--muted2); }
+
+  /* ── GO-TOS ── */
+  .gotos { padding: 2px 20px 20px; }
+  .gotos .row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  .gotos .row::-webkit-scrollbar { display: none; }
+  .goto {
+    flex: 0 0 auto; padding: 9px 14px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; white-space: nowrap; color: #d6d6da;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .goto .count { color: var(--muted2); font-weight: 500; font-size: 12px; }
+
+  /* ── TAB BAR ── */
+  .tabbar {
+    position: sticky; bottom: 0;
+    background: rgba(10,10,10,0.95); backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around; padding: 10px 0 14px;
+  }
+  .tab { color: var(--muted); font-size: 11px; text-align: center; }
+  .tab.active { color: #fff; }
+  .tab .ic { font-size: 20px; display: block; }
+
+  /* ═══════════════════════════════════════
+     FULL-SCREEN RESTAURANT PAGE
+     ═══════════════════════════════════════ */
+  .restaurant-page {
+    position: absolute; inset: 0;
+    background: var(--bg);
+    transform: translateY(100%);
+    transition: transform .35s ease;
+    z-index: 50;
+    overflow-y: auto;
+    border-radius: 36px;
+  }
+  .restaurant-page.open { transform: translateY(0); }
+
+  .rp-header {
+    padding: 16px 20px 0;
+    display: flex; justify-content: space-between; align-items: center;
+    position: sticky; top: 0; background: var(--bg); z-index: 2;
+    padding-bottom: 12px;
+  }
+  .rp-nav-btn {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(255,255,255,0.08);
+    border: none; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    color: #fff; font-size: 16px; font-weight: 400;
+    transition: background .12s ease;
+  }
+  .rp-nav-btn:active { background: rgba(255,255,255,0.15); }
+  .rp-nav-btn.back { font-size: 20px; }
+
+  .rp-hero-banner {
+    padding: 8px 20px 20px;
+  }
+  .rp-name { font-size: 28px; font-weight: 800; letter-spacing: -0.4px; margin-bottom: 4px; }
+  .rp-cuisine { font-size: 14px; color: var(--muted); }
+
+  .rp-body { padding: 0 20px 100px; }
+
+  .rp-section-head {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin: 24px 0 12px; font-weight: 700;
+  }
+  .rp-section-head:first-child { margin-top: 0; }
+
+  /* View mode */
+  .rp-view { transition: opacity .25s ease; }
+  .rp-view.fading { opacity: 0; }
+  .rp-view.hidden { display: none; }
+
+  .rp-reason {
+    font-size: 16px; line-height: 1.55; color: #ececef;
+    margin-bottom: 4px;
+  }
+  .rp-reason .accent {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 700;
+  }
+
+  .rp-dish-row {
+    padding: 12px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+  }
+  .rp-dish-row:last-child { border-bottom: none; }
+  .rp-dish-head { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+  .rp-dish-emoji { font-size: 18px; }
+  .rp-dish-name { font-size: 16px; font-weight: 700; color: #e6e6ea; }
+  .rp-dish-name.lead {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+  }
+  .rp-dish-who { font-size: 13px; color: #b8b8be; }
+  .rp-dish-note { font-size: 12px; color: var(--muted); font-style: italic; margin-top: 3px; }
+
+  /* Edit mode */
+  .rp-edit { display: none; opacity: 0; transition: opacity .25s ease; }
+  .rp-edit.show { display: block; }
+  .rp-edit.visible { opacity: 1; }
+
+  .reaction-row { display: flex; gap: 10px; margin-bottom: 8px; }
+  .reaction {
+    flex: 1; padding: 16px 8px; border-radius: 16px;
+    background: var(--surface2); border: 2px solid var(--border);
+    text-align: center; cursor: pointer; transition: all .15s ease;
+  }
+  .reaction.selected { border-color: var(--accent1); background: rgba(255,122,69,0.1); }
+  .reaction .r-emoji { font-size: 26px; display: block; margin-bottom: 5px; }
+  .reaction .r-label { font-size: 11px; font-weight: 600; color: var(--muted); }
+  .reaction.selected .r-label { color: var(--text); }
+
+  .dish-option {
+    padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+  }
+  .dish-option:last-child { border-bottom: none; }
+  .dish-top {
+    display: flex; align-items: center; gap: 10px;
+  }
+  .dish-check {
+    width: 24px; height: 24px; border-radius: 7px;
+    border: 2px solid var(--border); background: transparent;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13px; transition: all .15s ease; flex-shrink: 0;
+  }
+  .dish-option.checked .dish-check { background: var(--accent1); border-color: var(--accent1); color: #fff; }
+  .dish-option .d-emoji { font-size: 17px; }
+  .dish-option .d-name { font-size: 15px; font-weight: 600; color: #e6e6ea; }
+  .dish-option .d-who { font-size: 11px; color: var(--muted2); margin-left: auto; }
+
+  /* Per-dish mini reaction row */
+  .dish-reactions {
+    display: flex; gap: 6px; padding: 8px 0 4px 34px;
+    max-height: 0; overflow: hidden; opacity: 0;
+    transition: max-height .2s ease, opacity .2s ease;
+  }
+  .dish-option.checked .dish-reactions { max-height: 50px; opacity: 1; }
+  .dish-mini-react {
+    padding: 5px 10px; border-radius: 999px;
+    background: var(--surface2); border: 1.5px solid var(--border);
+    font-size: 15px; cursor: pointer; transition: all .12s ease;
+    display: flex; align-items: center; gap: 4px;
+  }
+  .dish-mini-react .dm-label {
+    font-size: 10px; font-weight: 600; color: var(--muted2); display: none;
+  }
+  .dish-mini-react.picked { border-color: var(--accent1); background: rgba(255,122,69,0.12); }
+  .dish-mini-react.picked .dm-label { display: inline; color: var(--text); }
+
+  .add-dish-row { display: flex; gap: 8px; margin-top: 12px; }
+  .add-dish-input {
+    flex: 1; padding: 12px 14px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: #fff; font-size: 14px; outline: none;
+  }
+  .add-dish-input::placeholder { color: var(--muted2); }
+  .add-dish-btn {
+    padding: 12px 16px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--accent1); font-size: 14px; font-weight: 700; cursor: pointer;
+  }
+
+  .note-input {
+    width: 100%; padding: 14px; border-radius: 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: #fff; font-size: 14px; outline: none; resize: none; min-height: 64px;
+  }
+  .note-input::placeholder { color: var(--muted2); }
+
+  /* Sticky bottom CTAs */
+  .rp-cta-bar {
+    position: sticky; bottom: 0;
+    background: linear-gradient(transparent, var(--bg) 20%);
+    padding: 20px 20px 24px;
+    display: flex; flex-direction: column; gap: 10px;
+  }
+  .rp-cta {
+    padding: 16px; border-radius: 14px; font-size: 16px; font-weight: 700;
+    border: none; cursor: pointer; text-align: center; width: 100%;
+  }
+  .rp-cta.primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff;
+  }
+  .rp-cta.secondary { background: var(--surface2); color: #fff; border: 1px solid var(--border); }
+  .rp-cta.tertiary { background: transparent; color: var(--muted); padding: 12px; }
+
+  /* Toast */
+  .toast {
+    position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: #1c1c1e; border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 999px; font-size: 13px;
+    display: none; z-index: 60; white-space: nowrap;
+  }
+  .toast.show { display: flex; }
+
+  .note-text { text-align: center; color: #555; font-size: 12px; margin: 8px 0 24px; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+
+  <!-- ═══ HOME SCREEN ═══ -->
+  <div class="home-screen" id="homeScreen">
+    <header>
+      <h1>Home</h1>
+      <div class="avatar"></div>
+    </header>
+
+    <div class="moments">
+      <div class="moment active">Tonight</div>
+      <div class="moment">Lunch</div>
+      <div class="moment">Date night</div>
+      <div class="moment">Group dinner</div>
+      <div class="moment">Quick bite</div>
+      <div class="moment">Special</div>
+    </div>
+
+    <div class="planned-strip" id="plannedStrip" onclick="openPlannedRestaurant()">
+      <div class="ps-left">
+        <div class="ps-label" id="plannedLabel">✓ You're going</div>
+        <div class="ps-name" id="plannedName">Boiling Beijing</div>
+        <div class="ps-dish" id="plannedDish">Get the fried rice</div>
+      </div>
+      <div class="ps-arrow">›</div>
+    </div>
+
+    <div class="eyebrow" id="heroEyebrow">Top pick for tonight</div>
+
+    <div class="hero-wrap" id="heroWrap">
+      <div class="hero" id="heroCard" onclick="openRestaurantPage('Boiling Beijing')">
+        <div class="place-name">Boiling Beijing</div>
+        <div class="place-meta">Chinese · Flushing · $$</div>
+        <div class="context-line">Puneet went <span class="ctx-accent">last week</span> · Casual, quick, under $20/pp</div>
+        <div class="dishes">
+          <div class="dish-line primary"><span class="emoji">🍳</span><span class="name">Fried rice</span></div>
+          <div class="dish-line"><span class="emoji">🌶️</span><span class="name">Mapo tofu</span></div>
+          <div class="dish-line"><span class="emoji">🥔</span><span class="name">Griddle potatoes</span></div>
+        </div>
+        <div class="dish-more">+1 more dish</div>
+        <div class="trust-line">Puneet, Pragya & Aditya liked it</div>
+      </div>
+    </div>
+
+    <div class="eyebrow" id="carouselEyebrow">Or these picks</div>
+    <div class="carousel" id="carousel">
+      <div class="pick" data-name="Don Angie" data-meta="Italian · West Village · $$$" data-dish="The carbonara · Pragya loved it" data-trust="Pragya & Jay" onclick="openRestaurantPage('Don Angie')">
+        <div class="pick-place">Don Angie</div>
+        <div class="pick-dish">The carbonara · Pragya loved it</div>
+        <div class="pick-meta">Italian · West Village</div>
+      </div>
+      <div class="pick" data-name="Dosa Kitchen" data-meta="South Indian · East Village · $$" data-dish="The masala dosa · Puneet loved it" data-trust="Puneet" onclick="openRestaurantPage('Dosa Kitchen')">
+        <div class="pick-place">Dosa Kitchen</div>
+        <div class="pick-dish">The masala dosa · Puneet loved it</div>
+        <div class="pick-meta">South Indian · East Village</div>
+      </div>
+      <div class="pick" data-name="Hav & Mar" data-meta="Seafood · Chelsea · $$$" data-dish="The lamb · Jay loved 2 dishes" data-trust="Jay" onclick="openRestaurantPage('Hav & Mar')">
+        <div class="pick-place">Hav & Mar</div>
+        <div class="pick-dish">The lamb · Jay loved 2 dishes</div>
+        <div class="pick-meta">Seafood · Chelsea</div>
+      </div>
+    </div>
+
+    <div class="eyebrow">Your go-tos</div>
+    <div class="gotos">
+      <div class="row">
+        <div class="goto">Lucali <span class="count">· 4x</span></div>
+        <div class="goto">Joe's Pizza <span class="count">· 6x</span></div>
+        <div class="goto">Saigon Social <span class="count">· 3x</span></div>
+        <div class="goto">Cafe Mogador <span class="count">· 5x</span></div>
+      </div>
+    </div>
+
+    <div class="tabbar">
+      <div class="tab active"><span class="ic">🏠</span>Home</div>
+      <div class="tab"><span class="ic">🔍</span>Search</div>
+      <div class="tab"><span class="ic">📍</span>My Places</div>
+      <div class="tab"><span class="ic">👥</span>Table</div>
+      <div class="tab"><span class="ic">✨</span>Taste</div>
+    </div>
+  </div>
+
+  <!-- ═══ FULL-SCREEN RESTAURANT PAGE ═══ -->
+  <div class="restaurant-page" id="restaurantPage">
+    <div class="rp-header">
+      <button class="rp-nav-btn back" id="backBtn" onclick="handleBack()">‹</button>
+      <button class="rp-nav-btn" onclick="closeRestaurantPage()">✕</button>
+    </div>
+
+    <div class="rp-hero-banner">
+      <div class="rp-name">Boiling Beijing</div>
+      <div class="rp-cuisine">Chinese · Flushing · $$</div>
+    </div>
+
+    <div class="rp-body">
+
+      <!-- ─── VIEW MODE ─── -->
+      <div class="rp-view" id="rpView">
+        <div class="rp-reason">
+          Start with <span class="accent">the fried rice</span> — three of your table have been here and they all order it.
+        </div>
+
+        <div class="rp-section-head">What to order</div>
+        <div class="rp-dish-row">
+          <div class="rp-dish-head">
+            <span class="rp-dish-emoji">🍳</span>
+            <span class="rp-dish-name lead">Fried rice</span>
+          </div>
+          <div class="rp-dish-who">Puneet ❤️ · Aditya ❤️</div>
+          <div class="rp-dish-note">Puneet: "Order this before anything else"</div>
+        </div>
+        <div class="rp-dish-row">
+          <div class="rp-dish-head">
+            <span class="rp-dish-emoji">🌶️</span>
+            <span class="rp-dish-name">Mapo tofu</span>
+          </div>
+          <div class="rp-dish-who">Puneet ❤️</div>
+        </div>
+        <div class="rp-dish-row">
+          <div class="rp-dish-head">
+            <span class="rp-dish-emoji">🥔</span>
+            <span class="rp-dish-name">Griddle potatoes</span>
+          </div>
+          <div class="rp-dish-who">Pragya ❤️</div>
+          <div class="rp-dish-note">Pragya: "Addictive"</div>
+        </div>
+        <div class="rp-dish-row">
+          <div class="rp-dish-head">
+            <span class="rp-dish-emoji">🫘</span>
+            <span class="rp-dish-name">Green beans</span>
+          </div>
+          <div class="rp-dish-who">Pragya 👍</div>
+        </div>
+      </div>
+
+      <!-- ─── EDIT MODE ─── -->
+      <div class="rp-edit" id="rpEdit">
+        <div class="rp-section-head" style="margin-top:0;">How was it?</div>
+        <div class="reaction-row">
+          <div class="reaction" onclick="pickReaction(this)">
+            <span class="r-emoji">❤️</span><span class="r-label">Loved it</span>
+          </div>
+          <div class="reaction" onclick="pickReaction(this)">
+            <span class="r-emoji">👍</span><span class="r-label">Liked it</span>
+          </div>
+          <div class="reaction" onclick="pickReaction(this)">
+            <span class="r-emoji">😐</span><span class="r-label">It was fine</span>
+          </div>
+          <div class="reaction" onclick="pickReaction(this)">
+            <span class="r-emoji">👎</span><span class="r-label">Skip it</span>
+          </div>
+        </div>
+
+        <div class="rp-section-head">What did you have?</div>
+        <!-- Dish options are populated dynamically by populateRestaurantPage() -->
+        <div class="add-dish-row">
+          <input class="add-dish-input" placeholder="Add a dish…" />
+          <button class="add-dish-btn">Add</button>
+        </div>
+
+        <div class="rp-section-head">Quick note (optional)</div>
+        <textarea class="note-input" placeholder='e.g. "The fried rice changed my life"'></textarea>
+      </div>
+    </div>
+
+    <!-- Sticky CTAs — change based on mode -->
+    <div class="rp-cta-bar" id="ctaBar">
+      <div id="viewCtas">
+        <button class="rp-cta primary" onclick="ctaGoHere()">Go here</button>
+        <button class="rp-cta secondary" onclick="enterEditMode()" style="margin-top:10px">I went here</button>
+        <button class="rp-cta tertiary" onclick="ctaSaveForLater()">Save for later</button>
+      </div>
+      <div id="editCtas" style="display:none">
+        <button class="rp-cta primary" onclick="saveVisit()">Save</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"><span id="toastMsg"></span></div>
+</div>
+
+<div class="note-text">
+  Stateful prototype · tap hero → full-screen · try all 3 CTAs ·
+  <a href="home_prototype_multidish.html" style="color:#ff7a45">multi-dish</a> ·
+  <a href="home_prototype.html" style="color:#ff7a45">rich</a>
+</div>
+
+<script>
+  // ══════════════════════════════════════
+  // RESTAURANT DATA — each pick has its own page content
+  // ══════════════════════════════════════
+  const restaurants = {
+    'Boiling Beijing': {
+      name: 'Boiling Beijing',
+      cuisine: 'Chinese · Flushing · $$',
+      context: 'Puneet went <span class="ctx-accent">last week</span> · Casual, quick, under $20/pp',
+      reason: 'Start with <span class="accent">the fried rice</span> — three of your table have been here and they all order it.',
+      dishes: [
+        { emoji: '🍳', name: 'Fried rice', lead: true, who: 'Puneet ❤️ · Aditya ❤️', note: 'Puneet: "Order this before anything else"', owner: "Puneet's pick" },
+        { emoji: '🌶️', name: 'Mapo tofu', lead: false, who: 'Puneet ❤️', note: '', owner: "Puneet's pick" },
+        { emoji: '🥔', name: 'Griddle potatoes', lead: false, who: 'Pragya ❤️', note: 'Pragya: "Addictive"', owner: "Pragya's pick" },
+        { emoji: '🫘', name: 'Green beans', lead: false, who: 'Pragya 👍', note: '', owner: "Pragya's pick" },
+      ],
+      leadDish: 'Get the fried rice',
+    },
+    'Don Angie': {
+      name: 'Don Angie',
+      cuisine: 'Italian · West Village · $$$',
+      context: 'Pragya went <span class="ctx-accent">3 times</span> · Great for date night',
+      reason: 'Get <span class="accent">the carbonara</span> — Pragya\'s been three times and orders it every visit.',
+      dishes: [
+        { emoji: '🍝', name: 'Carbonara', lead: true, who: 'Pragya ❤️ · Jay ❤️', note: 'Pragya: "Best in the city"', owner: "Pragya's pick" },
+        { emoji: '🥬', name: 'Chrysanthemum salad', lead: false, who: 'Pragya ❤️', note: '', owner: "Pragya's pick" },
+        { emoji: '🫕', name: 'Lasagna', lead: false, who: 'Jay 👍', note: '', owner: "Jay's pick" },
+      ],
+      leadDish: 'Get the carbonara',
+    },
+    'Dosa Kitchen': {
+      name: 'Dosa Kitchen',
+      cuisine: 'South Indian · East Village · $$',
+      context: 'Puneet went <span class="ctx-accent">2 weeks ago</span> · Quick solo lunch spot',
+      reason: 'Try <span class="accent">the masala dosa</span> — Puneet says it\'s the closest to homemade he\'s found.',
+      dishes: [
+        { emoji: '🫓', name: 'Masala dosa', lead: true, who: 'Puneet ❤️', note: 'Puneet: "Closest to homemade I\'ve found"', owner: "Puneet's pick" },
+        { emoji: '🍛', name: 'Sambar vada', lead: false, who: 'Puneet 👍', note: '', owner: "Puneet's pick" },
+        { emoji: '🥥', name: 'Coconut chutney', lead: false, who: 'Puneet ❤️', note: '', owner: "Puneet's pick" },
+      ],
+      leadDish: 'Get the masala dosa',
+    },
+    'Hav & Mar': {
+      name: 'Hav & Mar',
+      cuisine: 'Seafood · Chelsea · $$$',
+      context: 'Jay went <span class="ctx-accent">twice this month</span> · Good for groups',
+      reason: 'Start with <span class="accent">the lamb</span> — Jay\'s been twice and orders it over the seafood every time.',
+      dishes: [
+        { emoji: '🐑', name: 'Lamb', lead: true, who: 'Jay ❤️', note: 'Jay: "Don\'t let the seafood menu fool you"', owner: "Jay's pick" },
+        { emoji: '🦪', name: 'Oysters', lead: false, who: 'Jay ❤️', note: '', owner: "Jay's pick" },
+        { emoji: '🐟', name: 'Branzino', lead: false, who: 'Jay 👍', note: '', owner: "Jay's pick" },
+      ],
+      leadDish: 'Get the lamb',
+    }
+  };
+
+  let currentRestaurant = 'Boiling Beijing';
+
+  // ── Moment chips — sync eyebrow + planned strip ──
+  let activeMoment = 'Tonight';
+  document.querySelectorAll('.moment').forEach(m => {
+    m.addEventListener('click', () => {
+      document.querySelectorAll('.moment').forEach(x => x.classList.remove('active'));
+      m.classList.add('active');
+      activeMoment = m.textContent;
+      document.getElementById('heroEyebrow').textContent = 'Top pick for ' + activeMoment.toLowerCase();
+      document.getElementById('plannedLabel').textContent = activeMoment;
+    });
+  });
+
+  // ── Toast ──
+  let toastTimer;
+  function showToast(msg) {
+    const t = document.getElementById('toast');
+    document.getElementById('toastMsg').textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+  }
+
+  // ══════════════════════════════════════
+  // Populate restaurant page from data
+  // ══════════════════════════════════════
+  function populateRestaurantPage(key) {
+    const r = restaurants[key];
+    if (!r) return;
+    currentRestaurant = key;
+
+    // Header
+    document.querySelector('.rp-name').textContent = r.name;
+    document.querySelector('.rp-cuisine').textContent = r.cuisine;
+
+    // View mode — reason
+    document.querySelector('.rp-reason').innerHTML = r.reason;
+
+    // View mode — dishes
+    const viewContainer = document.getElementById('rpView');
+    const sectionHead = viewContainer.querySelector('.rp-section-head');
+    // Remove old dish rows
+    viewContainer.querySelectorAll('.rp-dish-row').forEach(el => el.remove());
+    // Build new ones
+    r.dishes.forEach(d => {
+      const row = document.createElement('div');
+      row.className = 'rp-dish-row';
+      row.innerHTML = `
+        <div class="rp-dish-head">
+          <span class="rp-dish-emoji">${d.emoji}</span>
+          <span class="rp-dish-name${d.lead ? ' lead' : ''}">${d.name}</span>
+        </div>
+        <div class="rp-dish-who">${d.who}</div>
+        ${d.note ? `<div class="rp-dish-note">${d.note}</div>` : ''}`;
+      viewContainer.appendChild(row);
+    });
+
+    // Edit mode — dish checkboxes with inline reactions
+    const editContainer = document.getElementById('rpEdit');
+    editContainer.querySelectorAll('.dish-option').forEach(el => el.remove());
+    const addDishRow = editContainer.querySelector('.add-dish-row');
+    r.dishes.forEach(d => {
+      const opt = document.createElement('div');
+      opt.className = 'dish-option';
+      opt.innerHTML = `
+        <div class="dish-top" onclick="toggleDish(this.parentElement)">
+          <div class="dish-check"></div>
+          <span class="d-emoji">${d.emoji}</span>
+          <span class="d-name">${d.name}</span>
+          <span class="d-who">${d.owner}</span>
+        </div>
+        <div class="dish-reactions">
+          <div class="dish-mini-react" onclick="pickDishReaction(event, this)">❤️<span class="dm-label">Loved</span></div>
+          <div class="dish-mini-react" onclick="pickDishReaction(event, this)">👍<span class="dm-label">Liked</span></div>
+          <div class="dish-mini-react" onclick="pickDishReaction(event, this)">😐<span class="dm-label">Fine</span></div>
+          <div class="dish-mini-react" onclick="pickDishReaction(event, this)">👎<span class="dm-label">Skip</span></div>
+        </div>`;
+      editContainer.insertBefore(opt, addDishRow);
+    });
+
+    // Reset edit state
+    editContainer.querySelectorAll('.reaction').forEach(r => r.classList.remove('selected'));
+    const noteInput = editContainer.querySelector('.note-input');
+    if (noteInput) noteInput.value = '';
+  }
+
+  // ── Restaurant page open/close ──
+  let currentMode = 'view';
+
+  function openRestaurantPage(restaurantKey) {
+    const key = restaurantKey || currentRestaurant;
+    populateRestaurantPage(key);
+    document.getElementById('homeScreen').classList.add('pushed');
+    document.getElementById('restaurantPage').classList.add('open');
+    showViewMode();
+  }
+
+  function closeRestaurantPage() {
+    document.getElementById('restaurantPage').classList.remove('open');
+    document.getElementById('homeScreen').classList.remove('pushed');
+    showViewMode();
+  }
+
+  // ── Back button: edit → view, or view → close ──
+  function handleBack() {
+    if (currentMode === 'edit') {
+      showViewMode();
+    } else {
+      closeRestaurantPage();
+    }
+  }
+
+  // ── View / Edit mode ──
+  function showViewMode() {
+    currentMode = 'view';
+    const view = document.getElementById('rpView');
+    const edit = document.getElementById('rpEdit');
+    edit.classList.remove('visible');
+    setTimeout(() => {
+      edit.classList.remove('show');
+      view.classList.remove('hidden');
+      view.classList.remove('fading');
+    }, 250);
+    document.getElementById('viewCtas').style.display = '';
+    document.getElementById('editCtas').style.display = 'none';
+    document.getElementById('restaurantPage').scrollTop = 0;
+  }
+
+  function enterEditMode() {
+    currentMode = 'edit';
+    const view = document.getElementById('rpView');
+    const edit = document.getElementById('rpEdit');
+    view.classList.add('fading');
+    setTimeout(() => {
+      view.classList.add('hidden');
+      edit.classList.add('show');
+      requestAnimationFrame(() => edit.classList.add('visible'));
+    }, 250);
+    document.getElementById('viewCtas').style.display = 'none';
+    document.getElementById('editCtas').style.display = '';
+    document.getElementById('restaurantPage').scrollTop = 0;
+  }
+
+  // ── Edit interactions ──
+  function pickReaction(el) {
+    document.querySelectorAll('.reaction').forEach(r => r.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+  function toggleDish(el) {
+    el.classList.toggle('checked');
+    el.querySelector('.dish-check').textContent = el.classList.contains('checked') ? '✓' : '';
+    // Reset per-dish reaction when unchecking
+    if (!el.classList.contains('checked')) {
+      el.querySelectorAll('.dish-mini-react').forEach(r => r.classList.remove('picked'));
+    }
+  }
+  function pickDishReaction(event, el) {
+    event.stopPropagation();
+    const row = el.closest('.dish-reactions');
+    row.querySelectorAll('.dish-mini-react').forEach(r => r.classList.remove('picked'));
+    el.classList.add('picked');
+  }
+
+  // ── CTA: Go here ──
+  let plannedRestaurantKey = null;
+
+  function ctaGoHere() {
+    const r = restaurants[currentRestaurant];
+    plannedRestaurantKey = currentRestaurant;
+    document.getElementById('plannedLabel').textContent = '✓ You\'re going';
+    document.getElementById('plannedName').textContent = r.name;
+    document.getElementById('plannedDish').textContent = r.leadDish;
+    closeRestaurantPage();
+    document.getElementById('plannedStrip').classList.add('show');
+    promoteNextPick();
+    showToast('✓ ' + r.name + ' added to your plan');
+  }
+
+  function openPlannedRestaurant() {
+    if (plannedRestaurantKey) openRestaurantPage(plannedRestaurantKey);
+  }
+
+  // ── CTA: Save for later ──
+  function ctaSaveForLater() {
+    closeRestaurantPage();
+    promoteNextPick();
+    showToast('Saved to Want to try');
+  }
+
+  // ── CTA: Save visit (from edit mode) ──
+  function saveVisit() {
+    closeRestaurantPage();
+    promoteNextPick();
+    showToast('Logged — your table will see this');
+  }
+
+  // ── Hero promotion ──
+  let heroRestaurant = 'Boiling Beijing';
+
+  function promoteNextPick() {
+    const hero = document.getElementById('heroCard');
+    const carousel = document.getElementById('carousel');
+    const picks = carousel.querySelectorAll('.pick:not(.removing)');
+
+    hero.classList.add('exiting');
+
+    setTimeout(() => {
+      if (picks.length === 0) {
+        heroRestaurant = null;
+        document.getElementById('heroWrap').innerHTML = `
+          <div style="text-align:center;padding:40px 20px;color:#8e8e93;">
+            <div style="font-size:28px;margin-bottom:10px;">✨</div>
+            <div style="font-size:16px;font-weight:600;color:#fff;margin-bottom:4px;">You've seen all your picks</div>
+            <div style="font-size:13px;">Check back tomorrow or ask your table to log more.</div>
+          </div>`;
+        document.getElementById('carouselEyebrow').style.display = 'none';
+        carousel.style.display = 'none';
+        return;
+      }
+
+      const next = picks[0];
+      const name = next.dataset.name;
+      const meta = next.dataset.meta;
+      const r = restaurants[name];
+
+      next.classList.add('removing');
+      setTimeout(() => next.remove(), 300);
+
+      heroRestaurant = name;
+
+      // Build dish lines from data
+      let dishHTML = '';
+      if (r && r.dishes.length > 0) {
+        const showDishes = r.dishes.slice(0, 3);
+        showDishes.forEach((d, i) => {
+          const isPrimary = i === 0;
+          dishHTML += `<div class="dish-line${isPrimary ? ' primary' : ''}" style="font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px;">
+            <span class="emoji">${d.emoji}</span>
+            <span class="name" ${isPrimary ? 'style="background:linear-gradient(135deg,#ffb089,#ff6fae);-webkit-background-clip:text;background-clip:text;color:transparent;"' : 'style="color:#d6d6da;"'}>${d.name}</span>
+          </div>`;
+        });
+        if (r.dishes.length > 3) {
+          dishHTML += `<div class="dish-more">+${r.dishes.length - 3} more dish</div>`;
+        }
+      }
+
+      const trustText = next.dataset.trust + ' liked it';
+
+      hero.classList.remove('exiting');
+      const ctxLine = r && r.context ? `<div class="context-line">${r.context}</div>` : '';
+      hero.innerHTML = `
+        <div class="place-name">${name}</div>
+        <div class="place-meta">${meta}</div>
+        ${ctxLine}
+        <div class="dishes">${dishHTML}</div>
+        <div class="trust-line" style="margin-top:6px;">${trustText}</div>`;
+      hero.setAttribute('onclick', `openRestaurantPage('${name}')`);
+      hero.classList.add('entering');
+      setTimeout(() => hero.classList.remove('entering'), 400);
+
+      if (carousel.querySelectorAll('.pick:not(.removing)').length === 0) {
+        setTimeout(() => {
+          document.getElementById('carouselEyebrow').style.display = 'none';
+          carousel.style.display = 'none';
+        }, 350);
+      }
+    }, 400);
+  }
+</script>
+</body>
+</html>

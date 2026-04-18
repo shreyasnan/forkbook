@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — Home (Sparse Data)</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #121214;
+    --surface2: #1a1a1d;
+    --border: #26262a;
+    --text: #fff;
+    --muted: #8e8e93;
+    --muted2: #6b6b70;
+    --accent1: #ff7a45;
+    --accent2: #ff2d87;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+
+  .phone {
+    max-width: 400px; margin: 24px auto;
+    background: var(--bg); border-radius: 36px;
+    border: 1px solid #222; overflow: hidden;
+    min-height: 820px; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  header {
+    padding: 18px 20px 4px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  header h1 { font-size: 26px; margin: 0; font-weight: 800; letter-spacing: -0.5px; }
+  header .avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+  }
+
+  .moments {
+    display: flex; gap: 8px; padding: 12px 20px 6px; overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .moments::-webkit-scrollbar { display: none; }
+  .moment {
+    flex: 0 0 auto; padding: 8px 14px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--muted); font-size: 13px; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  .moment.active {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    color: #fff; border-color: transparent;
+  }
+
+  /* Resurface prompt */
+  .resurface {
+    margin: 12px 16px 4px;
+    background: rgba(255,255,255,0.04);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 14px 16px;
+    display: none;
+  }
+  .resurface.show { display: block; }
+  .resurface .q { font-size: 13px; color: var(--muted); margin-bottom: 2px; }
+  .resurface .place { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
+  .resurface .row { display: flex; gap: 8px; }
+  .resurface button {
+    flex: 1; padding: 9px 0; border-radius: 10px; font-size: 13px; font-weight: 600;
+    border: 1px solid var(--border); background: var(--surface2); color: var(--text); cursor: pointer;
+  }
+  .resurface button.primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2));
+    border-color: transparent;
+  }
+
+  .eyebrow {
+    padding: 20px 20px 10px 22px;
+    font-size: 11px; font-weight: 700; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 1px;
+  }
+
+  /* ── HERO ── restaurant-first, dish-reason second */
+  .hero {
+    margin: 0 16px 10px;
+    background:
+      radial-gradient(140% 80% at 0% 0%, rgba(255,122,69,0.16), transparent 60%),
+      radial-gradient(140% 80% at 100% 100%, rgba(255,45,135,0.12), transparent 60%),
+      linear-gradient(160deg, #1a1417, #14171d);
+    border: 1px solid rgba(255,255,255,0.07);
+    border-radius: 24px; padding: 22px;
+    cursor: pointer; transition: transform .15s ease;
+  }
+  .hero:active { transform: scale(0.995); }
+
+  .avatars { display: flex; margin-bottom: 14px; }
+  .avatars .a {
+    width: 30px; height: 30px; border-radius: 50%;
+    background: #444; border: 2px solid #17131a;
+    margin-left: -8px; font-size: 11px; color: #fff;
+    display: flex; align-items: center; justify-content: center; font-weight: 700;
+  }
+  .avatars .a:first-child { margin-left: 0; }
+  .a.c1 { background: linear-gradient(135deg,#ff7a45,#ff2d87); }
+  .a.c2 { background: linear-gradient(135deg,#45a3ff,#7c4dff); }
+  .a.c3 { background: linear-gradient(135deg,#34d399,#0ea5e9); }
+  .a.c4 { background: linear-gradient(135deg,#fbbf24,#ef4444); }
+
+  .hero .place-name {
+    font-size: 26px; font-weight: 800; letter-spacing: -0.4px;
+    margin-bottom: 2px;
+  }
+  .hero .place-meta {
+    font-size: 13px; color: var(--muted); margin-bottom: 14px;
+  }
+  .hero .dish-reason {
+    font-size: 18px; line-height: 1.3; font-weight: 700;
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 4px;
+  }
+  .hero .trust-line {
+    font-size: 14px; color: #b8b8be;
+  }
+
+  /* ── CAROUSEL ── flatter, scannable alternates */
+  .carousel {
+    display: flex; gap: 10px; padding: 2px 16px 18px;
+    overflow-x: auto; scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .carousel::-webkit-scrollbar { display: none; }
+  .pick {
+    flex: 0 0 68%; scroll-snap-align: start;
+    background: rgba(255,255,255,0.025);
+    border: 1px solid var(--border);
+    border-radius: 16px; padding: 14px;
+    cursor: pointer;
+  }
+  .pick .mini-avatars { display: flex; margin-bottom: 10px; }
+  .pick .mini-avatars .a {
+    width: 22px; height: 22px; font-size: 9px;
+    border-width: 1.5px; border-color: #0f0f11;
+  }
+  .pick .pick-place { font-size: 17px; font-weight: 700; margin-bottom: 3px; }
+  .pick .pick-dish {
+    font-size: 13px; font-weight: 600;
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    margin-bottom: 2px;
+  }
+  .pick .pick-meta { font-size: 12px; color: var(--muted2); }
+
+  /* ── GO-TOS ── compact chips with visit hint */
+  .gotos { padding: 2px 20px 20px; }
+  .gotos .row { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+  .gotos .row::-webkit-scrollbar { display: none; }
+  .goto {
+    flex: 0 0 auto; padding: 9px 14px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; white-space: nowrap; color: #d6d6da;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .goto .count { color: var(--muted2); font-weight: 500; font-size: 12px; }
+
+  /* ── TAB BAR ── */
+  .tabbar {
+    position: sticky; bottom: 0;
+    background: rgba(10,10,10,0.95);
+    backdrop-filter: blur(20px);
+    border-top: 1px solid var(--border);
+    display: flex; justify-content: space-around; padding: 10px 0 14px;
+  }
+  .tab { color: var(--muted); font-size: 11px; text-align: center; }
+  .tab.active { color: #fff; }
+  .tab .ic { font-size: 20px; display: block; }
+
+  /* ── DECISION SHEET ── trimmed, 3 zones */
+  .sheet-back {
+    position: fixed; inset: 0; background: rgba(0,0,0,0.6);
+    display: none; align-items: flex-end; justify-content: center; z-index: 50;
+  }
+  .sheet-back.show { display: flex; }
+  .sheet {
+    width: 100%; max-width: 400px;
+    background: #131316;
+    border-radius: 24px 24px 0 0;
+    padding: 14px 20px 28px;
+    max-height: 82vh; overflow-y: auto;
+  }
+  .sheet .grab {
+    width: 36px; height: 4px; background: #3a3a3f;
+    border-radius: 2px; margin: 0 auto 18px;
+  }
+  .sheet .sheet-place { font-size: 24px; font-weight: 800; margin: 0 0 2px; letter-spacing: -0.3px; }
+  .sheet .sheet-cuisine { color: var(--muted); font-size: 13px; margin-bottom: 18px; }
+
+  /* Reason zone — merged why + dish */
+  .sheet .reason-block {
+    font-size: 16px; line-height: 1.5; color: #ececef;
+    margin-bottom: 20px;
+  }
+  .sheet .reason-block .accent {
+    background: linear-gradient(135deg,#ffb089,#ff6fae);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    font-weight: 700;
+  }
+
+  /* Table takes zone */
+  .sheet .section-head {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; margin: 0 0 10px; font-weight: 700;
+  }
+  .takes { margin-bottom: 20px; }
+  .take-row {
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    display: flex; align-items: baseline; gap: 0;
+  }
+  .take-row:last-child { border-bottom: none; }
+  .take-name { font-size: 14px; font-weight: 700; color: #fff; }
+  .take-sep { color: var(--muted2); margin: 0 6px; font-size: 13px; }
+  .take-status { font-size: 13px; font-weight: 600; color: #ffb089; }
+  .take-status.been { color: #9fc6ff; }
+  .take-date { font-size: 13px; color: var(--muted); }
+  .take-quote {
+    font-size: 12px; color: var(--muted); font-style: italic;
+    padding: 3px 0 0 0;
+  }
+  .take-content { display: flex; flex-direction: column; }
+
+  /* Actions zone */
+  .ctas { display: flex; flex-direction: column; gap: 10px; margin-top: 4px; }
+  .cta {
+    padding: 15px; border-radius: 14px; font-size: 15px; font-weight: 700;
+    border: none; cursor: pointer; text-align: center;
+  }
+  .cta.primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff;
+  }
+  .cta.secondary {
+    background: var(--surface2); color: #fff; border: 1px solid var(--border);
+  }
+  .cta.tertiary { background: transparent; color: var(--muted); padding: 10px; }
+
+  /* Toast */
+  .toast {
+    position: fixed; bottom: 90px; left: 50%; transform: translateX(-50%);
+    background: #1c1c1e; border: 1px solid var(--border);
+    padding: 10px 16px; border-radius: 999px; font-size: 13px;
+    display: none; z-index: 60;
+  }
+  .toast.show { display: flex; }
+
+  .note {
+    text-align: center; color: #555; font-size: 12px; margin: 8px 0 24px;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <header>
+    <h1>Home</h1>
+    <div class="avatar"></div>
+  </header>
+
+  <div class="moments">
+    <div class="moment active">Tonight</div>
+    <div class="moment">Lunch</div>
+    <div class="moment">Date night</div>
+    <div class="moment">Group dinner</div>
+    <div class="moment">Quick bite</div>
+    <div class="moment">Special</div>
+  </div>
+
+  <!-- Resurface prompt (toggle to preview) -->
+  <div class="resurface" id="resurface">
+    <div class="q">You were going to try…</div>
+    <div class="place">Dosa Kitchen</div>
+    <div class="row">
+      <button class="primary" onclick="hideResurface()">I went</button>
+      <button onclick="hideResurface()">Not yet</button>
+      <button onclick="hideResurface()">Never mind</button>
+    </div>
+  </div>
+
+  <div class="eyebrow">Top pick for tonight</div>
+
+  <!-- HERO — sparse: 1 person, with dish -->
+  <div class="hero" onclick="openSheet()">
+    <div class="avatars">
+      <div class="a c1">Pu</div>
+    </div>
+    <div class="place-name">Tatiana</div>
+    <div class="place-meta">New American · West Village · $$$</div>
+    <div class="dish-reason">The honey duck</div>
+    <div class="trust-line">Puneet loved it · Two weeks ago</div>
+  </div>
+
+  <div class="eyebrow">Or these picks</div>
+  <div class="carousel">
+    <!-- Sparse card 1: 1 person, no dish -->
+    <div class="pick" onclick="openSheet()">
+      <div class="mini-avatars avatars"><div class="a c2">Pr</div></div>
+      <div class="pick-place">Don Angie</div>
+      <div class="pick-dish">Pragya loved it</div>
+      <div class="pick-meta">Italian · West Village</div>
+    </div>
+    <!-- Sparse card 2: 1 person, liked (not loved), with dish -->
+    <div class="pick" onclick="openSheet()">
+      <div class="mini-avatars avatars"><div class="a c4">J</div></div>
+      <div class="pick-place">Hav & Mar</div>
+      <div class="pick-dish">The lamb · Jay liked it</div>
+      <div class="pick-meta">Seafood · Chelsea</div>
+    </div>
+    <!-- Sparse card 3: 1 person, just been there -->
+    <div class="pick" onclick="openSheet()">
+      <div class="mini-avatars avatars"><div class="a c3">A</div></div>
+      <div class="pick-place">Cafe Mogador</div>
+      <div class="pick-dish">Aditya's been here</div>
+      <div class="pick-meta">Moroccan · East Village</div>
+    </div>
+  </div>
+
+  <div class="eyebrow">Your go-tos</div>
+  <div class="gotos">
+    <div class="row">
+      <div class="goto">Lucali <span class="count">· 4x</span></div>
+      <div class="goto">Joe's Pizza <span class="count">· 6x</span></div>
+      <div class="goto">Saigon Social <span class="count">· 3x</span></div>
+      <div class="goto">Cafe Mogador <span class="count">· 5x</span></div>
+    </div>
+  </div>
+
+  <div class="tabbar">
+    <div class="tab active"><span class="ic">🏠</span>Home</div>
+    <div class="tab"><span class="ic">🔍</span>Search</div>
+    <div class="tab"><span class="ic">📍</span>My Places</div>
+    <div class="tab"><span class="ic">👥</span>Table</div>
+    <div class="tab"><span class="ic">✨</span>Taste</div>
+  </div>
+</div>
+
+<div class="note">Sparse data version — 1 person per pick · compare with <a href="home_prototype.html" style="color:#ff7a45">rich data version</a></div>
+<div style="text-align:center;margin-bottom:30px;">
+  <button onclick="document.getElementById('resurface').classList.toggle('show')"
+    style="background:#1c1c1e;color:#fff;border:1px solid #2a2a2c;padding:8px 16px;border-radius:10px;cursor:pointer;">
+    Toggle resurface prompt
+  </button>
+</div>
+
+<!-- DECISION SHEET — 3 zones: reason, table takes, actions -->
+<div class="sheet-back" id="sheetBack" onclick="if(event.target===this)closeSheet()">
+  <div class="sheet">
+    <div class="grab"></div>
+
+    <!-- Zone 1: Restaurant + merged reason -->
+    <div class="sheet-place">Tatiana</div>
+    <div class="sheet-cuisine">New American · West Village · $$$</div>
+    <div class="reason-block">
+      Get <span class="accent">the honey duck</span>. Puneet loved it — he went two weeks ago and called it "unreal."
+    </div>
+
+    <!-- Zone 2: Table takes — single person -->
+    <div class="section-head">What your table said</div>
+    <div class="takes">
+      <div class="take-row">
+        <div class="take-content">
+          <div>
+            <span class="take-name">Puneet</span>
+            <span class="take-sep">·</span>
+            <span class="take-status">Loved it</span>
+            <span class="take-sep">·</span>
+            <span class="take-date">2 weeks ago</span>
+          </div>
+          <div class="take-quote">"The duck is unreal"</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Zone 3: Actions -->
+    <div class="ctas">
+      <button class="cta primary" onclick="commit()">Go here</button>
+      <button class="cta secondary" onclick="closeSheet()">I went here</button>
+      <button class="cta tertiary" onclick="closeSheet()">Save for later</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"><span id="toastMsg"></span></div>
+
+<script>
+  document.querySelectorAll('.moment').forEach(m => {
+    m.addEventListener('click', () => {
+      document.querySelectorAll('.moment').forEach(x => x.classList.remove('active'));
+      m.classList.add('active');
+    });
+  });
+  let toastTimer;
+  function showToast(msg) {
+    document.getElementById('toastMsg').textContent = msg;
+    document.getElementById('toast').classList.add('show');
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => document.getElementById('toast').classList.remove('show'), 3000);
+  }
+  function openSheet() {
+    document.getElementById('sheetBack').classList.add('show');
+  }
+  function closeSheet() {
+    document.getElementById('sheetBack').classList.remove('show');
+  }
+  function commit() {
+    closeSheet();
+    showToast("Got it — we'll check in later");
+  }
+  function hideResurface() {
+    document.getElementById('resurface').classList.remove('show');
+  }
+</script>
+</body>
+</html>

@@ -1,0 +1,436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Table Tab Mock</title>
+  <style>
+    :root {
+      --bg: #0a0a0b;
+      --panel: #121316;
+      --panel-2: #17191d;
+      --text: #f5f5f7;
+      --text-soft: #d0d1d6;
+      --muted: #8e8e93;
+      --line: rgba(255,255,255,0.06);
+      --line-soft: rgba(255,255,255,0.04);
+      --warm: #c9a061;
+      --warm-soft: rgba(201,160,97,0.14);
+      --shadow: 0 18px 40px rgba(0,0,0,0.35);
+      --radius: 22px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: radial-gradient(circle at top, #151618 0%, #0a0a0b 42%);
+      color: var(--text);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      min-height: 100vh;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+    }
+    .phone {
+      width: 390px;
+      height: 844px;
+      background: #000;
+      border: 1px solid #202126;
+      border-radius: 38px;
+      overflow: hidden;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.55);
+      position: relative;
+    }
+    .status {
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 22px;
+      color: var(--muted);
+      font-size: 12px;
+      letter-spacing: 0.02em;
+    }
+    .content {
+      height: calc(100% - 44px - 84px);
+      overflow: auto;
+      padding: 10px 20px 28px;
+      scrollbar-width: none;
+    }
+    .content::-webkit-scrollbar { display: none; }
+    .header {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 18px;
+    }
+    .header h1 {
+      margin: 0;
+      font-size: 28px;
+      line-height: 1.05;
+      letter-spacing: -0.03em;
+    }
+    .header p {
+      margin: 6px 0 0;
+      font-size: 13px;
+      color: var(--muted);
+    }
+    .invite {
+      border: 1px solid rgba(201,160,97,0.24);
+      background: var(--warm-soft);
+      color: var(--warm);
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-weight: 700;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+    .section {
+      margin-bottom: 26px;
+    }
+    .label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      color: #a3a4aa;
+      margin: 0 0 12px;
+      font-weight: 700;
+    }
+    .best-match {
+      background: linear-gradient(180deg, rgba(201,160,97,0.08), rgba(18,19,22,1) 55%);
+      border: 1px solid rgba(255,255,255,0.06);
+      border-radius: var(--radius);
+      padding: 16px;
+      box-shadow: var(--shadow);
+    }
+    .best-match .eyebrow {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.12em;
+      color: #acaeb5;
+      margin-bottom: 10px;
+      font-weight: 700;
+    }
+    .best-match .name {
+      font-size: 20px;
+      font-weight: 800;
+      letter-spacing: -0.02em;
+      margin-bottom: 4px;
+    }
+    .best-match .sub {
+      font-size: 14px;
+      color: var(--text-soft);
+      margin-bottom: 10px;
+      line-height: 1.4;
+    }
+    .best-match .proof {
+      font-size: 13px;
+      color: var(--warm);
+      margin-bottom: 14px;
+      font-weight: 600;
+    }
+    .best-match .cta {
+      display: inline-flex;
+      gap: 6px;
+      align-items: center;
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 700;
+      border: 1px solid var(--line);
+      padding: 10px 14px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.03);
+    }
+    .person-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      display: grid;
+      grid-template-columns: 40px 1fr 14px;
+      gap: 12px;
+      align-items: start;
+      margin-bottom: 10px;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.18);
+    }
+    .person-card.top {
+      background: linear-gradient(180deg, rgba(201,160,97,0.06), rgba(19,21,23,1) 70%);
+      border-color: rgba(201,160,97,0.18);
+    }
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: rgba(201,160,97,0.14);
+      border: 1px solid rgba(201,160,97,0.28);
+      color: var(--warm);
+      font-weight: 800;
+      font-size: 14px;
+    }
+    .person-main {
+      min-width: 0;
+    }
+    .person-name {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 4px;
+      display: flex;
+      gap: 8px;
+      align-items: center;
+    }
+    .micro-tag {
+      font-size: 11px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: var(--warm);
+      border: 1px solid rgba(201,160,97,0.24);
+      padding: 4px 7px;
+      border-radius: 999px;
+      font-weight: 700;
+    }
+    .taste {
+      font-size: 14px;
+      line-height: 1.35;
+      color: var(--text-soft);
+      margin-bottom: 8px;
+    }
+    .proof-line {
+      font-size: 13px;
+      color: var(--warm);
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    .recent-line {
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .chev {
+      color: #6d6e75;
+      font-size: 18px;
+      line-height: 1;
+      margin-top: 3px;
+    }
+    .trust-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .trust-row {
+      display: grid;
+      grid-template-columns: 1fr auto auto;
+      gap: 10px;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: center;
+    }
+    .trust-row:last-child { border-bottom: none; }
+    .trust-key {
+      font-size: 14px;
+      font-weight: 600;
+    }
+    .trust-arrow {
+      color: var(--muted);
+    }
+    .trust-person {
+      color: var(--warm);
+      font-weight: 700;
+      font-size: 14px;
+    }
+    .recent-card {
+      background: var(--panel);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      overflow: hidden;
+    }
+    .recent-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      padding: 13px 14px;
+      border-bottom: 1px solid var(--line-soft);
+      align-items: start;
+    }
+    .recent-row:last-child { border-bottom: none; }
+    .recent-line {
+      font-size: 14px;
+      line-height: 1.4;
+      color: var(--text-soft);
+    }
+    .recent-line strong {
+      color: var(--text);
+      font-weight: 700;
+    }
+    .recent-line .place {
+      color: var(--warm);
+      font-weight: 700;
+    }
+    .recent-time {
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .tabbar {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      height: 84px;
+      border-top: 1px solid var(--line);
+      background: rgba(0,0,0,0.96);
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      padding-top: 10px;
+    }
+    .tab {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      color: var(--muted);
+      font-size: 10px;
+    }
+    .tab .icon {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      background: rgba(255,255,255,0.08);
+    }
+    .tab.active { color: var(--text); }
+    .tab.active .icon { background: rgba(255,255,255,0.18); }
+  </style>
+</head>
+<body>
+  <div class="phone">
+    <div class="status"><span>9:41</span><span>•••</span></div>
+    <div class="content">
+      <div class="header">
+        <div>
+          <h1>Table</h1>
+          <p>People whose taste you trust</p>
+        </div>
+        <div class="invite">+ Invite</div>
+      </div>
+      <div class="section">
+        <div class="label">Best match</div>
+        <div class="best-match">
+          <div class="eyebrow">Best person to follow right now</div>
+          <div class="name">Priya</div>
+          <div class="sub">Great for sushi and date-night spots</div>
+          <div class="proof">You liked 9 of her last 11 picks</div>
+          <div class="recent-line">Last: Omakase at Ju-Ni</div>
+          <div style="height:14px"></div>
+          <div class="cta">See Priya’s picks <span>›</span></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="label">Your people</div>
+        <div class="person-card top">
+          <div class="avatar">P</div>
+          <div class="person-main">
+            <div class="person-name">Priya <span class="micro-tag">Top match</span></div>
+            <div class="taste">Great for sushi and date-night spots</div>
+            <div class="proof-line">You liked 9 of 11 picks</div>
+            <div class="recent-line">Last: Omakase at Ju-Ni</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+        <div class="person-card top">
+          <div class="avatar">R</div>
+          <div class="person-main">
+            <div class="person-name">Raj <span class="micro-tag">Strong fit</span></div>
+            <div class="taste">Best for Indian and quick lunches</div>
+            <div class="proof-line">You agreed on 7 places</div>
+            <div class="recent-line">Last: Masala Dosa at Dosa Point</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+        <div class="person-card">
+          <div class="avatar">M</div>
+          <div class="person-main">
+            <div class="person-name">Maya</div>
+            <div class="taste">Always finds new places</div>
+            <div class="proof-line">You liked 4 of her 6 picks</div>
+            <div class="recent-line">Last: Flour + Water</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+        <div class="person-card">
+          <div class="avatar">A</div>
+          <div class="person-main">
+            <div class="person-name">Ankit</div>
+            <div class="taste">Reliable for group dinners and wine bars</div>
+            <div class="proof-line">You liked 5 of 8 picks</div>
+            <div class="recent-line">Last: Cotogna for the group</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+        <div class="person-card">
+          <div class="avatar">L</div>
+          <div class="person-main">
+            <div class="person-name">Lena</div>
+            <div class="taste">Pastry, natural wine, slow brunches</div>
+            <div class="proof-line">You liked 4 of her 6 picks</div>
+            <div class="recent-line">Last: Tartine Manufactory</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+        <div class="person-card">
+          <div class="avatar">S</div>
+          <div class="person-main">
+            <div class="person-name">Sam</div>
+            <div class="taste">Ramen, tacos, late-night food</div>
+            <div class="proof-line">You agreed on 6 places</div>
+            <div class="recent-line">Last: late ramen in Japantown</div>
+          </div>
+          <div class="chev">›</div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="label">Who to trust for what</div>
+        <div class="trust-card">
+          <div class="trust-row"><div class="trust-key">Sushi</div><div class="trust-arrow">→</div><div class="trust-person">Priya</div></div>
+          <div class="trust-row"><div class="trust-key">Indian</div><div class="trust-arrow">→</div><div class="trust-person">Raj</div></div>
+          <div class="trust-row"><div class="trust-key">New spots</div><div class="trust-arrow">→</div><div class="trust-person">Maya</div></div>
+          <div class="trust-row"><div class="trust-key">Group dinners</div><div class="trust-arrow">→</div><div class="trust-person">Ankit</div></div>
+          <div class="trust-row"><div class="trust-key">Date night</div><div class="trust-arrow">→</div><div class="trust-person">Priya</div></div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="label">Recent from your table</div>
+        <div class="recent-card">
+          <div class="recent-row">
+            <div class="recent-line"><strong>Priya</strong> got the Omakase at <span class="place">Ju-Ni</span> — worth it</div>
+            <div class="recent-time">2d</div>
+          </div>
+          <div class="recent-row">
+            <div class="recent-line"><strong>Maya</strong> saved <span class="place">Flour + Water</span> — worth trying</div>
+            <div class="recent-time">3d</div>
+          </div>
+          <div class="recent-row">
+            <div class="recent-line"><strong>Raj</strong> went back to <span class="place">Dosa Point</span> — still great</div>
+            <div class="recent-time">5d</div>
+          </div>
+          <div class="recent-row">
+            <div class="recent-line"><strong>Ankit</strong> booked <span class="place">Cotogna</span> for the group — good sign</div>
+            <div class="recent-time">1w</div>
+          </div>
+          <div class="recent-row">
+            <div class="recent-line"><strong>Lena</strong> recommended the morning bun at <span class="place">Tartine</span> — don’t miss it</div>
+            <div class="recent-time">1w</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="tabbar">
+      <div class="tab"><div class="icon"></div><div>Home</div></div>
+      <div class="tab"><div class="icon"></div><div>Search</div></div>
+      <div class="tab"><div class="icon"></div><div>My Places</div></div>
+      <div class="tab active"><div class="icon"></div><div>Table</div></div>
+    </div>
+  </div>
+</body>
+</html>

@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>ForkBook — Invite Landing Variants (v2: Showroom)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-font-smoothing: antialiased; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", sans-serif;
+    background: #0a0a0c;
+    color: #F5F5F7;
+    min-height: 100vh;
+    padding: 48px 24px 64px;
+  }
+  .page-header { max-width: 1600px; margin: 0 auto 16px; }
+  .page-header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+  .page-header p { color: #8E8E93; margin-top: 8px; font-size: 15px; line-height: 1.5; max-width: 780px; }
+  .page-header p strong { color: #C4A882; }
+
+  .principle {
+    max-width: 1600px;
+    margin: 0 auto 40px;
+    padding: 16px 18px;
+    background: rgba(196,168,130,0.06);
+    border: 1px solid rgba(196,168,130,0.18);
+    border-radius: 12px;
+    font-size: 13px;
+    color: #D0D0D4;
+    line-height: 1.55;
+  }
+  .principle strong { color: #C4A882; }
+
+  .variants {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
+    gap: 40px 32px;
+    max-width: 1700px;
+    margin: 0 auto;
+  }
+
+  .variant { display: flex; flex-direction: column; align-items: center; }
+  .variant-title {
+    font-size: 13px;
+    font-weight: 700;
+    letter-spacing: 1.4px;
+    color: #C4A882;
+    text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .variant-sub {
+    font-size: 13px;
+    color: #8E8E93;
+    margin-bottom: 20px;
+    max-width: 320px;
+    text-align: center;
+    line-height: 1.4;
+  }
+
+  /* iPhone frame */
+  .phone {
+    width: 360px;
+    height: 780px;
+    background: #000;
+    border-radius: 44px;
+    padding: 10px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(255,255,255,0.05);
+  }
+  .screen {
+    width: 100%;
+    height: 100%;
+    background: #0c0d0f;
+    border-radius: 36px;
+    overflow: hidden;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+  }
+  .status-bar {
+    height: 44px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 28px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #F5F5F7;
+    flex-shrink: 0;
+  }
+  .notch {
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 110px;
+    height: 32px;
+    background: #000;
+    border-radius: 18px;
+    z-index: 10;
+  }
+
+  .content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 22px 22px;
+  }
+
+  /* Shared components */
+  .avatar {
+    width: 64px; height: 64px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #C4A882, #8a7155);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 24px;
+    color: #0c0d0f;
+    flex-shrink: 0;
+  }
+  .avatar-sm {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #C4A882, #8a7155);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    color: #0c0d0f;
+    border: 2px solid #0c0d0f;
+  }
+  .cta {
+    width: 100%;
+    padding: 16px;
+    border-radius: 14px;
+    background: #C4A882;
+    color: #0c0d0f;
+    font-weight: 700;
+    font-size: 16px;
+    text-align: center;
+    border: none;
+    margin-top: 14px;
+    cursor: pointer;
+  }
+  .cta-secondary {
+    width: 100%;
+    padding: 14px;
+    border-radius: 14px;
+    background: transparent;
+    color: #B0B0B4;
+    font-weight: 600;
+    font-size: 14px;
+    text-align: center;
+    border: 1px solid rgba(255,255,255,0.1);
+    margin-top: 10px;
+  }
+
+  .label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.6px;
+    color: #8E8E93; text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  /* Peek card (used across variants) */
+  .peek-card {
+    background: #131517;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 12px;
+    padding: 13px 14px;
+    margin-bottom: 8px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+  .peek-rest { font-weight: 700; font-size: 15px; }
+  .peek-meta { font-size: 12px; color: #8E8E93; }
+  .peek-proof { font-size: 12px; color: #C4A882; margin-top: 2px; display: flex; align-items: center; gap: 6px; }
+  .proof-dot { width: 4px; height: 4px; background: #C4A882; border-radius: 50%; }
+
+  .reassure {
+    background: rgba(196,168,130,0.08);
+    border: 1px solid rgba(196,168,130,0.18);
+    border-radius: 12px;
+    padding: 14px;
+    margin-top: 16px;
+  }
+  .reassure-title { font-size: 13px; color: #C4A882; font-weight: 700; margin-bottom: 4px; }
+  .reassure-body { font-size: 12px; color: #B0B0B4; line-height: 1.45; }
+
+  /* ===== Variant B-specific ===== */
+  .b-invite-row {
+    display: flex; align-items: center; gap: 12px;
+    padding-top: 24px; margin-bottom: 22px;
+  }
+  .b-invite-text { font-size: 14px; color: #B0B0B4; }
+  .b-invite-text strong { color: #F5F5F7; font-weight: 700; }
+  .b-invite-sub { font-size: 12px; color: #8E8E93; margin-top: 2px; }
+
+  .b-demo-card {
+    background: #131517;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 16px;
+    padding: 18px;
+    margin-bottom: 16px;
+  }
+  .b-demo-rest { font-size: 18px; font-weight: 800; letter-spacing: -0.3px; margin-bottom: 2px; }
+  .b-demo-meta { font-size: 12px; color: #8E8E93; margin-bottom: 14px; }
+  .b-demo-visit {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 0;
+    border-top: 1px solid rgba(255,255,255,0.05);
+  }
+  .b-demo-visit-name { font-size: 13px; font-weight: 600; }
+  .b-demo-visit-dish { font-size: 11px; color: #C4A882; }
+
+  .b-explainer {
+    font-size: 13px; color: #B0B0B4;
+    text-align: center; line-height: 1.55;
+    margin-bottom: 8px;
+  }
+  .b-explainer strong { color: #F5F5F7; }
+
+  /* ===== Variant C-specific ===== */
+  .c-header { padding-top: 28px; text-align: center; margin-bottom: 28px; }
+  .c-header .avatar { margin: 0 auto 16px; }
+  .c-title { font-size: 22px; font-weight: 800; letter-spacing: -0.4px; line-height: 1.25; }
+  .c-sub { font-size: 13px; color: #8E8E93; margin-top: 6px; }
+
+  .c-step {
+    display: flex; gap: 12px; margin-bottom: 14px;
+  }
+  .c-num {
+    width: 28px; height: 28px; border-radius: 50%;
+    background: #C4A882; color: #0c0d0f;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 13px; flex-shrink: 0;
+  }
+  .c-step-title { font-size: 14px; font-weight: 700; margin-bottom: 3px; }
+  .c-step-body { font-size: 12px; color: #8E8E93; line-height: 1.45; }
+
+  .c-example {
+    background: #131517;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 14px;
+    margin-top: 10px;
+    margin-bottom: 18px;
+  }
+  .c-example-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.6px;
+    color: #8E8E93; text-transform: uppercase;
+    margin-bottom: 6px;
+  }
+  .c-example-body { font-size: 13px; color: #B0B0B4; line-height: 1.5; }
+  .c-example-body strong { color: #F5F5F7; }
+
+  /* ===== Variant D-specific ===== */
+  .d-top { padding-top: 22px; margin-bottom: 16px; }
+  .d-invite-row { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+  .d-invite-text { font-size: 14px; color: #B0B0B4; }
+  .d-invite-text strong { color: #F5F5F7; font-weight: 700; }
+
+  .d-hero { font-size: 19px; font-weight: 800; letter-spacing: -0.3px; line-height: 1.3; margin-bottom: 4px; }
+  .d-hero-sub { font-size: 13px; color: #8E8E93; line-height: 1.4; }
+
+  .d-peek {
+    background: #131517;
+    border: 1px solid rgba(255,255,255,0.05);
+    border-radius: 14px;
+    padding: 14px;
+    margin-bottom: 20px;
+  }
+  .d-peek-row {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 6px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.05);
+  }
+  .d-peek-row:last-child { border-bottom: none; }
+  .d-peek-rest { font-size: 13px; font-weight: 600; }
+  .d-peek-proof { font-size: 11px; color: #8E8E93; }
+
+  .d-you-card {
+    background: linear-gradient(180deg, rgba(196,168,130,0.08), rgba(196,168,130,0.02));
+    border: 1px solid rgba(196,168,130,0.2);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 16px;
+  }
+  .d-you-prompt { font-size: 15px; font-weight: 700; margin-bottom: 10px; }
+  .d-input {
+    background: #0c0d0f;
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 10px;
+    padding: 12px 14px;
+    color: #F5F5F7;
+    font-size: 14px;
+    width: 100%;
+  }
+  .d-input::placeholder { color: #6B6B70; }
+
+  /* Variant notes */
+  .variant-notes {
+    max-width: 320px;
+    margin-top: 18px;
+    color: #8E8E93;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .variant-notes strong { color: #C4A882; font-weight: 600; }
+
+  /* Summary box */
+  .summary {
+    max-width: 1200px;
+    margin: 56px auto 0;
+    padding: 24px 26px;
+    background: rgba(196,168,130,0.05);
+    border: 1px solid rgba(196,168,130,0.15);
+    border-radius: 16px;
+  }
+  .summary-eyebrow {
+    font-size: 11px; font-weight: 700; letter-spacing: 1.6px;
+    color: #C4A882; text-transform: uppercase; margin-bottom: 10px;
+  }
+  .summary-body { font-size: 14px; color: #E0E0E3; line-height: 1.6; }
+  .summary-body strong { color: #F5F5F7; }
+</style>
+</head>
+<body>
+
+<div class="page-header">
+  <h1>Invite landing — showroom approach</h1>
+  <p>Scenario: Pragya sent Shreyas an invite link. He tapped it. Pragya's table is shown as a <strong>demo of how ForkBook works</strong> — not something he's being granted access to. The primary job of each variant is to move him toward building his own table with his own IRL people.</p>
+</div>
+
+<div class="principle">
+  <strong>Design principle:</strong> No variant says "join Pragya's table." Each one frames Pragya's content as an example, reassures that ForkBook isn't a public social network, and pushes the CTA toward <strong>"build my table."</strong>
+</div>
+
+<div class="variants">
+
+  <!-- ============================================================= -->
+  <!-- VARIANT A — The Showroom -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-title">Variant A</div>
+    <div class="variant-sub">The Showroom — warm invitation + peek framed as demo + reassurance</div>
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status-bar"><span>9:41</span><span>●●● ●●</span></div>
+      <div class="content">
+        <div style="text-align: center; padding-top: 28px;">
+          <div class="avatar" style="margin: 0 auto 18px;">P</div>
+          <div style="font-size: 24px; font-weight: 800; letter-spacing: -0.5px; line-height: 1.25; margin-bottom: 10px;">
+            Pragya invited you<br/>to ForkBook
+          </div>
+          <div style="font-size: 14px; color: #8E8E93; line-height: 1.5; margin-bottom: 26px; padding: 0 12px;">
+            Restaurant picks from the people you trust.
+          </div>
+        </div>
+
+        <div class="label" style="margin-bottom: 4px;">A look at Pragya's table</div>
+        <div style="font-size: 12px; color: #B0B0B4; margin-bottom: 14px;">Her 5 friends · 33 places they've loved</div>
+
+        <div class="peek-card">
+          <div class="peek-rest">Shizen</div>
+          <div class="peek-meta">Japanese · Mission</div>
+          <div class="peek-proof"><span class="proof-dot"></span>3 of her friends · 5 visits</div>
+        </div>
+        <div class="peek-card">
+          <div class="peek-rest">Flour + Water</div>
+          <div class="peek-meta">Italian · Mission</div>
+          <div class="peek-proof"><span class="proof-dot"></span>Puneet loves the kabocha ravioli</div>
+        </div>
+        <div class="peek-card">
+          <div class="peek-rest">Dosa Point</div>
+          <div class="peek-meta">Indian · Sunnyvale</div>
+          <div class="peek-proof"><span class="proof-dot"></span>Her go-to with Ankita</div>
+        </div>
+
+        <div style="font-size: 12px; color: #8E8E93; text-align: center; margin: 14px 0 6px;">This is the kind of signal you'll start seeing.</div>
+
+        <div class="reassure">
+          <div class="reassure-title">Pragya's in your table — you're in hers</div>
+          <div class="reassure-body">Add more people you trust, remove anyone anytime. No strangers, no public reviews, no ads.</div>
+        </div>
+
+        <button class="cta">Start my table</button>
+        <button class="cta-secondary">Already on ForkBook? Sign in</button>
+      </div>
+    </div></div>
+    <div class="variant-notes">
+      <strong>Strength:</strong> Pragya's table is explicitly framed as a demo. The reassurance card pre-empts the "will strangers see my stuff?" worry.
+      <br/><strong>Tradeoff:</strong> Most content-heavy; requires scroll on smaller phones.
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- VARIANT B — One Strong Signal -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-title">Variant B</div>
+    <div class="variant-sub">One Strong Signal — teach the whole product through one vivid example</div>
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status-bar"><span>9:41</span><span>●●● ●●</span></div>
+      <div class="content">
+        <div class="b-invite-row">
+          <div class="avatar" style="width: 44px; height: 44px; font-size: 18px;">P</div>
+          <div>
+            <div class="b-invite-text"><strong>Pragya</strong> invited you to ForkBook</div>
+            <div class="b-invite-sub">Restaurant recs from people you actually know</div>
+          </div>
+        </div>
+
+        <div class="label">Here's how it works</div>
+
+        <div class="b-demo-card">
+          <div class="b-demo-rest">Shizen</div>
+          <div class="b-demo-meta">Japanese · Mission · Pragya's table</div>
+
+          <div class="b-demo-visit">
+            <div class="avatar-sm" style="width: 26px; height: 26px; font-size: 11px;">P</div>
+            <div style="flex: 1;">
+              <div class="b-demo-visit-name">Pragya · 3 visits</div>
+              <div class="b-demo-visit-dish">Always orders the Spicy Miso Ramen</div>
+            </div>
+          </div>
+          <div class="b-demo-visit">
+            <div class="avatar-sm" style="width: 26px; height: 26px; font-size: 11px;">P</div>
+            <div style="flex: 1;">
+              <div class="b-demo-visit-name">Puneet · 2 visits</div>
+              <div class="b-demo-visit-dish">Loves the Karaage chicken</div>
+            </div>
+          </div>
+          <div class="b-demo-visit">
+            <div class="avatar-sm" style="width: 26px; height: 26px; font-size: 11px;">A</div>
+            <div style="flex: 1;">
+              <div class="b-demo-visit-name">Ankita · 1 visit</div>
+              <div class="b-demo-visit-dish">Dish of the night: Agedashi tofu</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="b-explainer">
+          Your table starts with Pragya — and works just like this as you add the people you trust.
+        </div>
+
+        <div class="reassure">
+          <div class="reassure-title">Small &amp; real</div>
+          <div class="reassure-body">No strangers. No ads. No public reviews. Just the people you trust, telling you what's actually good.</div>
+        </div>
+
+        <button class="cta">Build my table</button>
+        <button class="cta-secondary">Sign in</button>
+      </div>
+    </div></div>
+    <div class="variant-notes">
+      <strong>Strength:</strong> One vivid example teaches the whole model — who went, what they ordered, how often. Density without overload.
+      <br/><strong>Tradeoff:</strong> Less visual variety; one card has to do all the work.
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- VARIANT C — The Journey -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-title">Variant C</div>
+    <div class="variant-sub">The Journey — step through what happens after they join</div>
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status-bar"><span>9:41</span><span>●●● ●●</span></div>
+      <div class="content">
+        <div class="c-header">
+          <div class="avatar">P</div>
+          <div class="c-title">Pragya invited you</div>
+          <div class="c-sub">Here's how ForkBook works</div>
+        </div>
+
+        <div class="c-step">
+          <div class="c-num">1</div>
+          <div>
+            <div class="c-step-title">Invite your IRL friends</div>
+            <div class="c-step-body">The people who actually know your taste — not strangers online.</div>
+          </div>
+        </div>
+        <div class="c-step">
+          <div class="c-num">2</div>
+          <div>
+            <div class="c-step-title">Log places you love</div>
+            <div class="c-step-body">What you ordered, what you'd go back for. Build your own food memory.</div>
+          </div>
+        </div>
+        <div class="c-step" style="margin-bottom: 10px;">
+          <div class="c-num">3</div>
+          <div>
+            <div class="c-step-title">Get the right rec, instantly</div>
+            <div class="c-step-body">When you're hungry, ForkBook pulls the perfect spot from your table — fit to tonight.</div>
+          </div>
+        </div>
+
+        <div class="c-example">
+          <div class="c-example-label">For example — Pragya's table</div>
+          <div class="c-example-body">33 places. Tonight it served her <strong>Shizen</strong> because Puneet's been 4 times and it's right for a quick weeknight dinner.</div>
+        </div>
+
+        <div class="reassure" style="margin-top: 0; margin-bottom: 4px;">
+          <div class="reassure-title">Small &amp; real</div>
+          <div class="reassure-body">No strangers, no ads, no public reviews.</div>
+        </div>
+
+        <button class="cta">Start my table</button>
+      </div>
+    </div></div>
+    <div class="variant-notes">
+      <strong>Strength:</strong> Teaches the product model explicitly. Prevents empty-home confusion after signup.
+      <br/><strong>Tradeoff:</strong> More explanatory than emotional. Feels like a pitch, not a message from a friend.
+    </div>
+  </div>
+
+  <!-- ============================================================= -->
+  <!-- VARIANT D — Activation -->
+  <!-- ============================================================= -->
+  <div class="variant">
+    <div class="variant-title">Variant D</div>
+    <div class="variant-sub">The Activation — peek + capture first log before they land</div>
+    <div class="phone"><div class="screen">
+      <div class="notch"></div>
+      <div class="status-bar"><span>9:41</span><span>●●● ●●</span></div>
+      <div class="content">
+        <div class="d-top">
+          <div class="d-invite-row">
+            <div class="avatar-sm" style="width: 34px; height: 34px; font-size: 14px;">P</div>
+            <div class="d-invite-text"><strong>Pragya</strong> invited you to ForkBook</div>
+          </div>
+          <div class="d-hero">Let's build your table.</div>
+          <div class="d-hero-sub">Pragya's in your table, you're in hers. Add a place you love to start shaping yours.</div>
+        </div>
+
+        <div class="label">How a table looks — Pragya's</div>
+        <div class="d-peek">
+          <div class="d-peek-row">
+            <div>
+              <div class="d-peek-rest">Shizen</div>
+              <div class="d-peek-proof">Japanese · 3 friends went</div>
+            </div>
+            <div style="color: #6B6B70; font-size: 20px;">›</div>
+          </div>
+          <div class="d-peek-row">
+            <div>
+              <div class="d-peek-rest">Flour + Water</div>
+              <div class="d-peek-proof">Italian · Puneet's kabocha ravioli</div>
+            </div>
+            <div style="color: #6B6B70; font-size: 20px;">›</div>
+          </div>
+          <div class="d-peek-row">
+            <div>
+              <div class="d-peek-rest">Dosa Point</div>
+              <div class="d-peek-proof">Indian · Ankita's go-to</div>
+            </div>
+            <div style="color: #6B6B70; font-size: 20px;">›</div>
+          </div>
+        </div>
+
+        <div class="label">Your first place</div>
+        <div class="d-you-card">
+          <div class="d-you-prompt">What's a restaurant you love?</div>
+          <input class="d-input" placeholder="e.g. Piccino in Dogpatch" />
+        </div>
+
+        <button class="cta">Add &amp; start my table</button>
+        <button class="cta-secondary">Skip for now</button>
+      </div>
+    </div></div>
+    <div class="variant-notes">
+      <strong>Strength:</strong> No empty-home problem. Captures a first log at peak motivation, so the user enters the app already contributing.
+      <br/><strong>Tradeoff:</strong> One extra step before the home screen. "Skip for now" path needs to be visible and guilt-free.
+    </div>
+  </div>
+
+</div>
+
+<div class="summary">
+  <div class="summary-eyebrow">What changed from v1</div>
+  <div class="summary-body">
+    In the previous set, variants leaned toward "join Pragya's table" — which, if taken literally, would expose the new user to Pragya's full social graph and break the IRL-only trust model. This v2 set reframes Pragya's data as a <strong>showroom</strong>: a demo of how ForkBook works, not something the user gets access to. Accepting the invite still creates a mutual 1:1 connection between Shreyas and Pragya — but the landing page narrative is always "build <strong>your</strong> table," never "enter hers." Each variant includes at least one reassurance about what ForkBook isn't (no strangers, no ads, no public reviews) to make the positioning unmistakable.
+  </div>
+</div>
+
+</body>
+</html>

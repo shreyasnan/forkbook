@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>ForkBook — Log a Meal</title>
+<style>
+  :root {
+    --bg: #000;
+    --surface: #121214;
+    --surface2: #1a1a1d;
+    --border: #26262a;
+    --text: #fff;
+    --muted: #8e8e93;
+    --muted2: #6b6b70;
+    --accent1: #ff7a45;
+    --accent2: #ff2d87;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; padding: 0; background: #0a0a0a; color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Helvetica Neue", sans-serif; }
+
+  .phone {
+    max-width: 400px; margin: 24px auto;
+    background: var(--bg); border-radius: 36px;
+    border: 1px solid #222; overflow: hidden;
+    min-height: 820px; position: relative;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  }
+
+  /* ── ENTRY POINTS ── */
+  .entry-demo {
+    padding: 20px;
+  }
+  .entry-demo .label {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; font-weight: 700; margin-bottom: 12px;
+  }
+  .entry-btn {
+    width: 100%; padding: 16px; border-radius: 16px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: var(--text); font-size: 15px; font-weight: 600;
+    cursor: pointer; text-align: left; margin-bottom: 10px;
+    display: flex; align-items: center; gap: 12px;
+  }
+  .entry-btn .icon { font-size: 20px; }
+  .entry-btn .desc { font-size: 12px; color: var(--muted); font-weight: 400; margin-top: 2px; }
+
+  /* ── FLOW SCREENS ── */
+  .screen {
+    display: none; min-height: 820px;
+    flex-direction: column;
+  }
+  .screen.active { display: flex; }
+
+  .flow-header {
+    padding: 18px 20px 12px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .flow-header .back {
+    font-size: 14px; color: var(--accent1); font-weight: 600;
+    background: none; border: none; cursor: pointer; padding: 0;
+  }
+  .flow-header .step {
+    font-size: 12px; color: var(--muted); font-weight: 600;
+  }
+  .flow-header .close {
+    font-size: 18px; color: var(--muted); background: none; border: none; cursor: pointer;
+  }
+
+  .flow-title {
+    padding: 0 20px;
+    font-size: 24px; font-weight: 800; letter-spacing: -0.3px;
+    margin-bottom: 6px;
+  }
+  .flow-subtitle {
+    padding: 0 20px;
+    font-size: 14px; color: var(--muted); margin-bottom: 20px;
+  }
+
+  /* Search / input */
+  .search-wrap {
+    padding: 0 20px; margin-bottom: 16px;
+  }
+  .search-input {
+    width: 100%; padding: 14px 16px; border-radius: 14px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: #fff; font-size: 15px; outline: none;
+  }
+  .search-input::placeholder { color: var(--muted2); }
+
+  /* Restaurant result rows */
+  .result-list { padding: 0 20px; flex: 1; }
+  .result-row {
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,0.04);
+    cursor: pointer;
+  }
+  .result-row:last-child { border-bottom: none; }
+  .result-name { font-size: 16px; font-weight: 700; }
+  .result-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+  .result-table-hint {
+    font-size: 12px; color: var(--accent1); margin-top: 4px; font-weight: 600;
+  }
+
+  /* Reaction selector */
+  .reaction-section { padding: 0 20px; margin-bottom: 24px; }
+  .reaction-row {
+    display: flex; gap: 10px;
+  }
+  .reaction {
+    flex: 1; padding: 16px 10px; border-radius: 16px;
+    background: var(--surface2); border: 2px solid var(--border);
+    text-align: center; cursor: pointer; transition: all .15s ease;
+  }
+  .reaction.selected {
+    border-color: var(--accent1);
+    background: rgba(255,122,69,0.1);
+  }
+  .reaction .emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+  .reaction .rlabel { font-size: 12px; font-weight: 600; color: var(--muted); }
+  .reaction.selected .rlabel { color: var(--text); }
+
+  /* Dish input */
+  .dish-section { padding: 0 20px; margin-bottom: 20px; }
+  .dish-section .section-label {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; font-weight: 700; margin-bottom: 10px;
+  }
+  .dish-chips {
+    display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;
+  }
+  .dish-chip {
+    padding: 8px 14px; border-radius: 999px;
+    background: var(--surface2); border: 1px solid var(--border);
+    font-size: 13px; font-weight: 600; color: #d6d6da;
+    cursor: pointer;
+  }
+  .dish-chip.selected {
+    background: rgba(255,122,69,0.12); border-color: var(--accent1); color: #fff;
+  }
+  .dish-add {
+    width: 100%; padding: 12px 16px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: #fff; font-size: 14px; outline: none;
+  }
+  .dish-add::placeholder { color: var(--muted2); }
+
+  /* Note */
+  .note-section { padding: 0 20px; margin-bottom: 20px; }
+  .note-section .section-label {
+    font-size: 11px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: 1px; font-weight: 700; margin-bottom: 10px;
+  }
+  .note-input {
+    width: 100%; padding: 12px 16px; border-radius: 12px;
+    background: var(--surface2); border: 1px solid var(--border);
+    color: #fff; font-size: 14px; outline: none; resize: none; min-height: 60px;
+  }
+  .note-input::placeholder { color: var(--muted2); }
+
+  /* Bottom action */
+  .flow-action {
+    padding: 16px 20px 28px;
+    margin-top: auto;
+  }
+  .flow-btn {
+    width: 100%; padding: 16px; border-radius: 14px;
+    font-size: 16px; font-weight: 700; border: none;
+    cursor: pointer; text-align: center;
+  }
+  .flow-btn.primary {
+    background: linear-gradient(135deg, var(--accent1), var(--accent2)); color: #fff;
+  }
+  .flow-btn.disabled {
+    background: var(--surface2); color: var(--muted2); pointer-events: none;
+  }
+  .flow-btn.secondary {
+    background: var(--surface2); color: #fff; border: 1px solid var(--border);
+    margin-top: 10px;
+  }
+
+  /* Confirmation */
+  .confirm-wrap {
+    flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; padding: 40px 20px;
+    text-align: center;
+  }
+  .confirm-emoji { font-size: 48px; margin-bottom: 16px; }
+  .confirm-title { font-size: 22px; font-weight: 800; margin-bottom: 8px; }
+  .confirm-sub { font-size: 15px; color: var(--muted); line-height: 1.5; max-width: 280px; }
+  .confirm-sub b { color: #fff; }
+
+  /* Summary card in confirmation */
+  .summary-card {
+    background: var(--surface2); border: 1px solid var(--border);
+    border-radius: 16px; padding: 16px; margin: 20px 0;
+    text-align: left; width: 100%; max-width: 320px;
+  }
+  .summary-card .s-place { font-size: 18px; font-weight: 700; margin-bottom: 2px; }
+  .summary-card .s-meta { font-size: 13px; color: var(--muted); margin-bottom: 10px; }
+  .summary-card .s-row {
+    font-size: 13px; color: #d6d6da; margin-bottom: 4px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .summary-card .s-row .dot { color: var(--accent1); }
+
+  .note-text {
+    text-align: center; color: #555; font-size: 12px;
+    margin: 8px 0 24px;
+  }
+</style>
+</head>
+<body>
+
+<div class="phone">
+
+  <!-- SCREEN 0: Entry points demo -->
+  <div class="screen active" id="screen-entry">
+    <div class="flow-header">
+      <div></div>
+      <div class="step">Log a meal</div>
+      <div></div>
+    </div>
+    <div class="flow-title">How did you get here?</div>
+    <div class="flow-subtitle">These are the entry points into the log flow</div>
+    <div class="entry-demo">
+      <div class="label">Entry points</div>
+      <button class="entry-btn" onclick="goTo('screen-search')">
+        <span class="icon">🏠</span>
+        <div>
+          <div>From Home — "I went here"</div>
+          <div class="desc">Tapped a recommendation, then "I went here" in the sheet</div>
+        </div>
+      </button>
+      <button class="entry-btn" onclick="goTo('screen-search')">
+        <span class="icon">📍</span>
+        <div>
+          <div>From My Places — log a visit</div>
+          <div class="desc">Tapped a saved place and chose to log it</div>
+        </div>
+      </button>
+      <button class="entry-btn" onclick="goTo('screen-search')">
+        <span class="icon">➕</span>
+        <div>
+          <div>Fresh — add a new place</div>
+          <div class="desc">Opened the log flow from scratch</div>
+        </div>
+      </button>
+    </div>
+  </div>
+
+  <!-- SCREEN 1: Where did you eat? -->
+  <div class="screen" id="screen-search">
+    <div class="flow-header">
+      <button class="back" onclick="goTo('screen-entry')">Cancel</button>
+      <div class="step">Step 1 of 3</div>
+      <div></div>
+    </div>
+    <div class="flow-title">Where did you eat?</div>
+    <div class="flow-subtitle">Search or pick a recent spot</div>
+    <div class="search-wrap">
+      <input class="search-input" placeholder="Search restaurants…" id="searchInput" oninput="filterResults()" />
+    </div>
+    <div class="result-list" id="resultList">
+      <div class="result-row" onclick="selectPlace('Tatiana','New American · West Village · $$$')">
+        <div class="result-name">Tatiana</div>
+        <div class="result-meta">New American · West Village · $$$</div>
+        <div class="result-table-hint">Puneet & Pragya have been here</div>
+      </div>
+      <div class="result-row" onclick="selectPlace('Don Angie','Italian · West Village')">
+        <div class="result-name">Don Angie</div>
+        <div class="result-meta">Italian · West Village</div>
+        <div class="result-table-hint">Pragya loved the carbonara</div>
+      </div>
+      <div class="result-row" onclick="selectPlace('Dosa Kitchen','South Indian · East Village')">
+        <div class="result-name">Dosa Kitchen</div>
+        <div class="result-meta">South Indian · East Village</div>
+      </div>
+      <div class="result-row" onclick="selectPlace('Hav & Mar','Seafood · Chelsea')">
+        <div class="result-name">Hav & Mar</div>
+        <div class="result-meta">Seafood · Chelsea</div>
+        <div class="result-table-hint">Jay's been 3 times</div>
+      </div>
+      <div class="result-row" onclick="selectPlace('Lucali','Pizza · Carroll Gardens')">
+        <div class="result-name">Lucali</div>
+        <div class="result-meta">Pizza · Carroll Gardens</div>
+      </div>
+      <div class="result-row" onclick="selectPlace('Cafe Mogador','Moroccan · East Village')">
+        <div class="result-name">Cafe Mogador</div>
+        <div class="result-meta">Moroccan · East Village</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 2: How was it? -->
+  <div class="screen" id="screen-reaction">
+    <div class="flow-header">
+      <button class="back" onclick="goTo('screen-search')">Back</button>
+      <div class="step">Step 2 of 3</div>
+      <div></div>
+    </div>
+    <div class="flow-title" id="reactionTitle">Tatiana</div>
+    <div class="flow-subtitle">How was it?</div>
+
+    <div class="reaction-section">
+      <div class="reaction-row">
+        <div class="reaction" onclick="selectReaction(this,'loved')">
+          <span class="emoji">❤️</span>
+          <span class="rlabel">Loved it</span>
+        </div>
+        <div class="reaction" onclick="selectReaction(this,'liked')">
+          <span class="emoji">👍</span>
+          <span class="rlabel">Liked it</span>
+        </div>
+        <div class="reaction" onclick="selectReaction(this,'fine')">
+          <span class="emoji">😐</span>
+          <span class="rlabel">It was fine</span>
+        </div>
+        <div class="reaction" onclick="selectReaction(this,'skip')">
+          <span class="emoji">👎</span>
+          <span class="rlabel">Skip it</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="dish-section">
+      <div class="section-label">What did you have?</div>
+      <div class="dish-chips" id="dishChips">
+        <!-- populated dynamically based on table data -->
+      </div>
+      <input class="dish-add" placeholder="Add a dish…" id="dishInput" />
+    </div>
+
+    <div class="note-section">
+      <div class="section-label">Quick note (optional)</div>
+      <textarea class="note-input" placeholder="e.g. 'The duck is unreal'" id="noteInput"></textarea>
+    </div>
+
+    <div class="flow-action">
+      <button class="flow-btn primary" id="nextBtn" onclick="goTo('screen-confirm')">Next</button>
+    </div>
+  </div>
+
+  <!-- SCREEN 3: Confirmation -->
+  <div class="screen" id="screen-confirm">
+    <div class="flow-header">
+      <button class="back" onclick="goTo('screen-reaction')">Back</button>
+      <div class="step">Step 3 of 3</div>
+      <div></div>
+    </div>
+    <div class="confirm-wrap">
+      <div class="confirm-emoji">✅</div>
+      <div class="confirm-title">Looks good</div>
+      <div class="confirm-sub">This will be visible to <b>your table</b> and help them decide where to eat next.</div>
+
+      <div class="summary-card">
+        <div class="s-place" id="summaryPlace">Tatiana</div>
+        <div class="s-meta" id="summaryMeta">New American · West Village · $$$</div>
+        <div class="s-row"><span class="dot">●</span> <span id="summaryReaction">Loved it</span></div>
+        <div class="s-row" id="summaryDish" style="display:none"><span class="dot">●</span> <span id="summaryDishText"></span></div>
+        <div class="s-row" id="summaryNote" style="display:none"><span class="dot">●</span> "<span id="summaryNoteText"></span>"</div>
+      </div>
+
+      <div style="width:100%;max-width:320px;">
+        <button class="flow-btn primary" onclick="saveMeal()">Save</button>
+        <button class="flow-btn secondary" onclick="goTo('screen-reaction')">Edit</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SCREEN 4: Done -->
+  <div class="screen" id="screen-done">
+    <div class="confirm-wrap">
+      <div class="confirm-emoji">🎉</div>
+      <div class="confirm-title">Logged</div>
+      <div class="confirm-sub">Your table will see this next time they're deciding where to eat.</div>
+      <div style="width:100%;max-width:320px;margin-top:20px;">
+        <button class="flow-btn primary" onclick="goTo('screen-entry')">Done</button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div class="note-text">Prototype — tap through the 3-step log flow · <a href="home_prototype.html" style="color:var(--accent1)">Back to Home</a></div>
+
+<script>
+  let selectedPlace = { name: '', meta: '' };
+  let selectedReaction = '';
+
+  const tableDishes = {
+    'Tatiana': ['Honey duck', 'Martini'],
+    'Don Angie': ['Carbonara', 'Chrysanthemum salad'],
+    'Hav & Mar': ['Lamb', 'Oysters'],
+    'Dosa Kitchen': ['Masala dosa', 'Coconut chutney'],
+  };
+
+  function goTo(id) {
+    document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+    document.getElementById(id).classList.add('active');
+
+    if (id === 'screen-confirm') buildSummary();
+  }
+
+  function filterResults() {
+    const q = document.getElementById('searchInput').value.toLowerCase();
+    document.querySelectorAll('.result-row').forEach(r => {
+      const name = r.querySelector('.result-name').textContent.toLowerCase();
+      r.style.display = name.includes(q) ? '' : 'none';
+    });
+  }
+
+  function selectPlace(name, meta) {
+    selectedPlace = { name, meta };
+    document.getElementById('reactionTitle').textContent = name;
+
+    // populate dish suggestions from table data
+    const chips = document.getElementById('dishChips');
+    chips.innerHTML = '';
+    const dishes = tableDishes[name] || [];
+    dishes.forEach(d => {
+      const el = document.createElement('div');
+      el.className = 'dish-chip';
+      el.textContent = d;
+      el.onclick = () => {
+        el.classList.toggle('selected');
+      };
+      chips.appendChild(el);
+    });
+
+    if (dishes.length > 0) {
+      const hint = document.createElement('div');
+      hint.style.cssText = 'font-size:11px;color:#8e8e93;margin-top:4px;width:100%';
+      hint.textContent = 'From your table\'s visits';
+      chips.appendChild(hint);
+    }
+
+    goTo('screen-reaction');
+  }
+
+  function selectReaction(el, reaction) {
+    selectedReaction = reaction;
+    document.querySelectorAll('.reaction').forEach(r => r.classList.remove('selected'));
+    el.classList.add('selected');
+  }
+
+  function buildSummary() {
+    document.getElementById('summaryPlace').textContent = selectedPlace.name;
+    document.getElementById('summaryMeta').textContent = selectedPlace.meta;
+
+    const reactions = { loved: '❤️ Loved it', liked: '👍 Liked it', fine: '😐 It was fine', skip: '👎 Skip it' };
+    document.getElementById('summaryReaction').textContent = reactions[selectedReaction] || 'No reaction';
+
+    const selectedDishes = [];
+    document.querySelectorAll('.dish-chip.selected').forEach(c => selectedDishes.push(c.textContent));
+    const customDish = document.getElementById('dishInput').value.trim();
+    if (customDish) selectedDishes.push(customDish);
+
+    if (selectedDishes.length) {
+      document.getElementById('summaryDish').style.display = 'flex';
+      document.getElementById('summaryDishText').textContent = selectedDishes.join(', ');
+    } else {
+      document.getElementById('summaryDish').style.display = 'none';
+    }
+
+    const note = document.getElementById('noteInput').value.trim();
+    if (note) {
+      document.getElementById('summaryNote').style.display = 'flex';
+      document.getElementById('summaryNoteText').textContent = note;
+    } else {
+      document.getElementById('summaryNote').style.display = 'none';
+    }
+  }
+
+  function saveMeal() {
+    goTo('screen-done');
+  }
+</script>
+</body>
+</html>

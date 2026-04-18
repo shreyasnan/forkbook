@@ -28,9 +28,19 @@ class RestaurantSearchService: NSObject, ObservableObject {
 
         completer.delegate = self
 
-        // Use .query to get broader results (addresses + POIs)
-        // .pointOfInterest alone can be too restrictive in Simulator
-        completer.resultTypes = [.pointOfInterest, .query]
+        // Restaurant-only: use .pointOfInterest and filter to food categories
+        completer.resultTypes = .pointOfInterest
+
+        // Filter to restaurant-related categories
+        if #available(iOS 16.0, *) {
+            completer.pointOfInterestFilter = MKPointOfInterestFilter(including: [
+                .restaurant,
+                .cafe,
+                .bakery,
+                .brewery,
+                .foodMarket
+            ])
+        }
 
         // Debounce search text so we don't fire on every keystroke
         cancellable = $searchText
@@ -62,7 +72,7 @@ extension RestaurantSearchService: MKLocalSearchCompleterDelegate {
     func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.suggestions = completer.results.prefix(6).map { result in
+            self.suggestions = completer.results.prefix(8).map { result in
                 RestaurantSuggestion(
                     name: result.title,
                     subtitle: result.subtitle
@@ -75,7 +85,6 @@ extension RestaurantSearchService: MKLocalSearchCompleterDelegate {
     func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
         DispatchQueue.main.async { [weak self] in
             self?.isSearching = false
-            // Silently handle — user can still type manually
             print("Search completer error: \(error.localizedDescription)")
         }
     }

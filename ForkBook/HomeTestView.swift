@@ -28,6 +28,19 @@ struct HomeTestView: View {
     @State private var tableRestaurants: [SharedRestaurant] = []
     @State private var tableMembers: [FirestoreService.CircleMember] = []
     @State private var hasLoaded = false
+    @State private var usingMockData = false
+    @ObservedObject private var locationManager = LocationManager.shared
+
+    // Transient toast shown after "Go here" (and similar confirmations)
+    // so the user gets immediate feedback that the action was noted.
+    @State private var toastMessage: String? = nil
+    @State private var showToast = false
+
+    // Restaurants the user has dismissed ("Changed my mind") or acted on
+    // ("Save for later", "Go here" → logged). Persisted so they don't
+    // resurface on next launch.
+    @State private var dismissedNames: Set<String> = []
+    private static let dismissedKey = "ForkBook_DismissedHeroNames"
     private let firestoreService = FirestoreService.shared
 
     // -- Design tokens --
@@ -39,6 +52,17 @@ struct HomeTestView: View {
     private static let lightText = Color(hex: "F5F5F7")
 
     private var currentUid: String? { Auth.auth().currentUser?.uid }
+
+    /// Whether the committed-pick card should be visible right now.
+    /// Requires: pick exists, at least 2 hours old, under 7 days, no chip active.
+    private var isPickCardVisible: Bool {
+        guard selectedOccasion == nil,
+              let pick = committedPick,
+              pick.hoursAgo >= 2,
+              pick.hoursAgo < 24 * 7
+        else { return false }
+        return true
+    }
 
     // =========================================================================
     // MARK: - Body
@@ -58,17 +82,19 @@ struct HomeTestView: View {
                     let heroes = heroCards
                     let backups = backupCards
 
-                    // Committed pick — "Did you go?" card sits above the hero.
-                    if let pick = committedPick, pick.hoursAgo < 24 * 7 {
+                    // Committed pick — "Did you go?" card.
+                    // Only shown after 2 hours (user went out and came back).
+                    // Hidden when an occasion chip is active.
+                    if isPickCardVisible, let pick = committedPick {
                         committedPickCard(pick)
                             .padding(.horizontal, 16)
                             .padding(.top, 18)
                     }
 
                     if !heroes.isEmpty {
-                        // When committed pick is active, show fresh picks
+                        // When committed pick is visible, show fresh picks
                         // under a lighter label so they don't compete.
-                        if committedPick != nil {
+                        if isPickCardVisible {
                             Text("FRESH PICKS")
                                 .font(.system(size: 11, weight: .bold))
                                 .tracking(1.5)
@@ -81,8 +107,8 @@ struct HomeTestView: View {
                         let idx = min(currentHeroIndex, heroes.count - 1)
                         heroCardView(heroes[idx])
                             .padding(.horizontal, 16)
-                            .padding(.top, committedPick != nil ? 0 : 18)
-                    } else if committedPick == nil {
+                            .padding(.top, isPickCardVisible ? 0 : 18)
+                    } else if !isPickCardVisible {
                         emptyState
                             .padding(.horizontal, 16)
                             .padding(.top, 18)
@@ -109,27 +135,46 @@ struct HomeTestView: View {
                 }
             }
             .background(Color.fbBg)
+            .overlay(alignment: .bottom) {
+                if showToast, let message = toastMessage {
+                    FBToast(message: message, style: .prominent)
+                        .transition(.opacity.combined(with: .move(edge: .bottom)))
+                        .padding(.bottom, 90)
+                }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .sheet(item: $selectedHero) { hero in
                 testDetailSheet(hero)
             }
-            .sheet(isPresented: $showAddPlace) {
+            .sheet(isPresented: $showAddPlace, onDismiss: {
+                // Reset prefill after sheet closes so stale data
+                // doesn't leak into a future manual "+" tap.
+                logPrefillName = ""
+                logPrefillAddress = ""
+                logPrefillCuisine = nil
+            }) {
                 AddPlaceTestFlow(
                     prefillName: logPrefillName.isEmpty ? nil : logPrefillName,
                     prefillAddress: logPrefillAddress.isEmpty ? nil : logPrefillAddress,
                     prefillCuisine: logPrefillCuisine
                 )
                 .environmentObject(store)
+                .id(logPrefillName)   // force SwiftUI to create a fresh view
             }
             .navigationDestination(isPresented: $showProfile) {
-                ProfileView()
+                AccountMenuView()
                     .environmentObject(store)
             }
         }
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
-            committedPick = CommittedPick.load()
+            // DEV: clear stale committed pick from prior testing.
+            // Remove this line once committed-pick flow is stable.
+            CommittedPick.clear()
+            committedPick = nil
+            loadDismissed()
+            locationManager.requestLocation()
             await loadTableData()
         }
     }
@@ -140,19 +185,19 @@ struct HomeTestView: View {
 
     private var homeHeader: some View {
         HStack(alignment: .top) {
-            Text("Tonight")
+            Text(MealWindow.current.headerLabel)
                 .font(.system(size: 26, weight: .heavy))
                 .tracking(-0.5)
                 .foregroundColor(Color.fbText)
             Spacer()
             Button { showProfile = true } label: {
-                RingedAvatarView(
-                    name: Auth.auth().currentUser?.displayName ?? "User",
-                    size: 32,
-                    photoData: ProfilePhotoStore.shared.load(),
-                    showRing: true
-                )
+                Image(systemName: "line.3.horizontal")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(Color.fbText)
+                    .frame(width: 36, height: 36)
+                    .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
         }
     }
 
@@ -185,16 +230,16 @@ struct HomeTestView: View {
                     .foregroundStyle(Self.mutedGray)
 
                 if pick.hoursAgo < 1 {
-                    Text("\u{00B7} Saved just now")
+                    Text("\u{00B7} Just now")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Self.mutedGray)
                 } else if pick.hoursAgo < 24 {
-                    Text("\u{00B7} Saved \(Int(pick.hoursAgo))h ago")
+                    Text("\u{00B7} \(Int(pick.hoursAgo))h ago")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Self.mutedGray)
                 } else {
                     let days = Int(pick.hoursAgo / 24)
-                    Text("\u{00B7} Saved \(days)d ago")
+                    Text("\u{00B7} \(days)d ago")
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Self.mutedGray)
                 }
@@ -209,12 +254,6 @@ struct HomeTestView: View {
                     .padding(.bottom, 16)
             }
 
-            // Prompt
-            Text("Did you end up going?")
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(Color(hex: "B0B0B4"))
-                .padding(.bottom, 16)
-
             // CTAs
             VStack(spacing: 10) {
                 Button {
@@ -223,7 +262,7 @@ struct HomeTestView: View {
                     logPrefillAddress = pick.address
                     logPrefillCuisine = pick.cuisine
                     clearPick()
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                         showAddPlace = true
                     }
                 } label: {
@@ -267,6 +306,7 @@ struct HomeTestView: View {
 
                     Button {
                         UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        dismissRestaurant(pick.name)
                         withAnimation(.easeOut(duration: 0.25)) {
                             clearPick()
                         }
@@ -335,14 +375,14 @@ struct HomeTestView: View {
                 .padding(.vertical, 10)
                 .background(
                     Capsule()
-                        .fill(active ? Self.warmAccent.opacity(0.10)
-                                     : Color.white.opacity(0.03))
+                        .fill(active ? Self.warmAccent.opacity(0.12)
+                                     : Color.white.opacity(0.06))
                 )
                 .overlay(
                     Capsule()
                         .stroke(
-                            active ? Self.warmAccent.opacity(0.40)
-                                   : Color.white.opacity(0.06),
+                            active ? Self.warmAccent.opacity(0.50)
+                                   : Color.white.opacity(0.22),
                             lineWidth: 1
                         )
                 )
@@ -354,7 +394,7 @@ struct HomeTestView: View {
         if let tag = selectedOccasion {
             return "ALSO GOOD FOR \(tag.sectionUppercase)"
         }
-        return "OTHER STRONG OPTIONS"
+        return "PICKS YOU MAY LIKE FOR \(MealWindow.current.eyebrowFragment)"
     }
 
     private var emptyState: some View {
@@ -373,21 +413,19 @@ struct HomeTestView: View {
 
         let body: String = {
             if !hasOwnPlaces && !hasTableFriends {
-                return "Log a few places or invite your circle \u{2014} ForkBook gets sharper with every entry."
+                return "Log a few places to get picks."
             }
             if !hasOwnPlaces {
-                return "Your circle has logs, but we need yours too. Add a place you\u{2019}ve been."
+                return "Add a place you\u{2019}ve been to get picks."
             }
             if !hasTableFriends {
-                return "Picks get much stronger with a few trusted friends logging too."
+                return "Picks get stronger with a few trusted friends logging too."
             }
             if !hasTableSignal {
-                return "Your circle hasn\u{2019}t logged anything recent. Nudge them to share what they\u{2019}ve been eating."
+                return "Your circle is quiet. Nudge them to log."
             }
-            return "Log a few places you\u{2019}ve been and ForkBook will start surfacing what to get tonight."
+            return "Log a few places you\u{2019}ve been and we\u{2019}ll start surfacing picks."
         }()
-
-        let ctaLabel = hasOwnPlaces && !hasTableFriends ? "Add a place anyway" : "Add a place"
 
         return VStack(alignment: .leading, spacing: 8) {
             Text(title)
@@ -397,19 +435,16 @@ struct HomeTestView: View {
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
-            Button {
-                showAddPlace = true
-            } label: {
-                Text(ctaLabel)
-                    .font(.system(size: 14, weight: .bold))
-                    .foregroundStyle(Color.fbText)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 10)
-                    .background(Capsule().fill(Self.warmAccent.opacity(0.18)))
-                    .overlay(Capsule().stroke(Self.warmAccent.opacity(0.35), lineWidth: 1))
+            // There is no generic "Add a place" form anymore — logging always
+            // starts from a place card via "I went here". Nudge the user to
+            // Search, which is where new places get surfaced and logged from.
+            if !hasOwnPlaces {
+                Text("Use the Search tab to find a place, then tap \u{201C}I went here\u{201D} to log it.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Self.warmAccent.opacity(0.95))
+                    .padding(.top, 6)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.top, 6)
-            .buttonStyle(HomeCardPressStyle())
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 4)
@@ -450,50 +485,57 @@ struct HomeTestView: View {
     // =========================================================================
 
     private func heroCardView(_ hero: HeroCardData) -> some View {
+        let dishes = Array(
+            ([hero.heroDish] + hero.supportingDishes)
+                .filter { !$0.isEmpty }
+                .prefix(2)
+        )
+        let showChanged = hero.changedConfidence.map { !isNewToYouPhrase($0) } ?? false
+
         let cardContent = VStack(alignment: .leading, spacing: 0) {
             Text(hero.eyebrow)
                 .font(.system(size: 11, weight: .bold))
                 .tracking(1.4)
                 .foregroundStyle(Self.mutedGray)
-                .padding(.bottom, 10)
+                .padding(.bottom, 12)
 
-            Text(hero.restaurant)
-                .font(.system(size: 28, weight: .heavy))
-                .tracking(-0.6)
-                .foregroundStyle(Self.lightText)
-                .padding(.bottom, 3)
+            // Name + distance + chevron (chevron = "tap for detail" affordance)
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(hero.restaurant)
+                    .font(.system(size: 28, weight: .heavy))
+                    .tracking(-0.6)
+                    .foregroundStyle(Self.lightText)
+                Spacer(minLength: 8)
+                if let distance = hero.distanceText {
+                    Text(distance)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Self.dimGray)
+                }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(Self.dimGray)
+            }
+            .padding(.bottom, 4)
 
-            Text(hero.meta)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Self.dimGray)
-                .padding(.bottom, 20)
-
-            Text(hero.directive)
-                .font(.system(size: 22, weight: .heavy))
-                .tracking(-0.3)
-                .foregroundStyle(Self.lightText)
-                .padding(.bottom, 10)
-
-            if !hero.supportingDishes.isEmpty {
-                Text(hero.supportingDishes.joined(separator: " \u{00B7} "))
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color(hex: "B0B0B4"))
-                    .padding(.bottom, hero.socialProof == nil ? 16 : 10)
+            if !hero.meta.isEmpty {
+                Text(hero.meta)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Self.dimGray)
+                    .padding(.bottom, 18)
             }
 
-            if let social = hero.socialProof {
-                Text(social)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Self.warmAccent)
+            if !dishes.isEmpty {
+                Text(dishes.joined(separator: " \u{00B7} "))
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundStyle(Self.lightText)
                     .padding(.bottom, 14)
             }
 
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Self.warmAccent.opacity(0.85))
-                .padding(.bottom, hero.changedConfidence == nil ? 22 : 10)
+                .foregroundStyle(Self.warmAccent)
 
-            if let changed = hero.changedConfidence {
+            if showChanged, let changed = hero.changedConfidence {
                 HStack(spacing: 6) {
                     Circle()
                         .fill(Self.warmAccent)
@@ -502,26 +544,7 @@ struct HomeTestView: View {
                         .font(.system(size: 12, weight: .medium))
                         .foregroundStyle(Color(hex: "B0B0B4"))
                 }
-                .padding(.bottom, 22)
-            }
-
-            HStack {
-                Spacer()
-                Button {
-                    UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    selectedHero = hero
-                } label: {
-                    Text("Go here \u{2192}")
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(Color.fbText)
-                        .padding(.horizontal, 22)
-                        .padding(.vertical, 11)
-                        .background(Color.white.opacity(0.10))
-                        .clipShape(Capsule())
-                        .overlay(Capsule().stroke(Color.white.opacity(0.14), lineWidth: 1))
-                        .shadow(color: .black.opacity(0.2), radius: 8, x: 0, y: 4)
-                }
-                .buttonStyle(HomeCardPressStyle())
+                .padding(.top, 10)
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -534,6 +557,7 @@ struct HomeTestView: View {
             .shadow(color: .black.opacity(0.42), radius: 28, x: 0, y: 16)
             .contentShape(Rectangle())
             .onTapGesture {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
                 selectedHero = hero
             }
     }
@@ -543,37 +567,49 @@ struct HomeTestView: View {
     // =========================================================================
 
     private func backupCard(_ backup: BackupCardData) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack(alignment: .firstTextBaseline) {
+        let dishes = Array(
+            ([backup.heroDish] + backup.supportingDishes)
+                .filter { !$0.isEmpty }
+                .prefix(2)
+        )
+
+        return VStack(alignment: .leading, spacing: 0) {
+            // Name + distance + chevron (mirrors hero card affordance).
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
                 Text(backup.restaurant)
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.fbText)
-                Spacer()
-                if let time = extractTime(from: backup.meta) {
-                    Text(time)
-                        .font(.system(size: 12, weight: .medium))
+                Spacer(minLength: 8)
+                if let distance = backup.distanceText {
+                    Text(distance)
+                        .font(.system(size: 12, weight: .semibold))
                         .foregroundStyle(Self.dimGray)
                 }
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(Self.dimGray)
             }
-            .padding(.bottom, 4)
+            .padding(.bottom, 3)
 
-            Text(backup.directive)
-                .font(.system(size: 14, weight: .semibold))
-                .foregroundStyle(Self.warmAccent)
-                .padding(.bottom, 5)
+            if !backup.meta.isEmpty {
+                Text(backup.meta)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(Self.dimGray)
+                    .padding(.bottom, 8)
+            }
+
+            if !dishes.isEmpty {
+                Text(dishes.joined(separator: " \u{00B7} "))
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(Color.fbText)
+                    .lineLimit(2)
+                    .padding(.bottom, 6)
+            }
 
             Text(backup.trustLine)
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(Self.warmAccent)
                 .lineLimit(1)
-
-            if let changed = backup.changedConfidence {
-                Text(changed)
-                    .font(.system(size: 11, weight: .semibold))
-                    .foregroundStyle(Self.warmAccent.opacity(0.85))
-                    .padding(.top, 3)
-                    .lineLimit(1)
-            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 16)
@@ -591,12 +627,13 @@ struct HomeTestView: View {
                 eyebrow: alsoGoodSectionLabel,
                 restaurant: backup.restaurant,
                 meta: backup.meta,
-                directive: backup.directive,
                 heroDish: backup.heroDish,
                 supportingDishes: backup.supportingDishes,
                 trustLine: backup.trustLine,
                 socialProof: backup.socialProof,
                 changedConfidence: backup.changedConfidence,
+                friendSummaries: backup.friendSummaries,
+                distanceText: backup.distanceText,
                 address: backup.address,
                 cuisine: backup.cuisine
             )
@@ -638,6 +675,19 @@ struct HomeTestView: View {
         logPrefillAddress = ""
     }
 
+    // MARK: - Toast
+
+    /// Show a transient confirmation message at the bottom of Home.
+    /// Used after "Go here" so the user gets a clear signal the place
+    /// was noted and we'll follow up later to ask how it went.
+    private func showToastMessage(_ message: String) {
+        toastMessage = message
+        withAnimation(.easeInOut(duration: 0.2)) { showToast = true }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.4) {
+            withAnimation(.easeInOut(duration: 0.2)) { showToast = false }
+        }
+    }
+
     // MARK: - Committed Pick Helpers
 
     private func commitPick(from hero: HeroCardData) {
@@ -653,6 +703,24 @@ struct HomeTestView: View {
     private func clearPick() {
         CommittedPick.clear()
         committedPick = nil
+    }
+
+    // MARK: - Dismissed Restaurants
+
+    private func dismissRestaurant(_ name: String) {
+        dismissedNames.insert(name.lowercased())
+        saveDismissed()
+    }
+
+    private func saveDismissed() {
+        let arr = Array(dismissedNames)
+        UserDefaults.standard.set(arr, forKey: Self.dismissedKey)
+    }
+
+    private func loadDismissed() {
+        if let arr = UserDefaults.standard.stringArray(forKey: Self.dismissedKey) {
+            dismissedNames = Set(arr)
+        }
     }
 
     /// Open the hero's restaurant in Apple Maps.
@@ -677,23 +745,11 @@ struct HomeTestView: View {
         }
     }
 
-    private func extractDish(from directive: String) -> String {
-        let prefixes = ["Get the ", "Order the ", "Go for the ",
-                        "Don\u{2019}t skip the ", "Have to try the ",
-                        "If you go, get the "]
-        for prefix in prefixes {
-            if directive.hasPrefix(prefix) {
-                return String(directive.dropFirst(prefix.count))
-            }
-        }
-        return directive
-    }
-
-    private func extractTime(from meta: String) -> String? {
-        let parts = meta
-            .components(separatedBy: "\u{00B7}")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-        return parts.first(where: { $0.contains("min") || $0.contains("hr") })
+    /// Returns true if `s` starts with "New to you" (case-insensitive). Used
+    /// to suppress the per-card "New to you" secondary line once the section
+    /// subhead already carries that framing.
+    private func isNewToYouPhrase(_ s: String) -> Bool {
+        s.lowercased().hasPrefix("new to you")
     }
 
     // =========================================================================
@@ -713,17 +769,14 @@ struct HomeTestView: View {
                     Text(hero.meta)
                         .font(.system(size: 13, weight: .medium))
                         .foregroundStyle(Self.dimGray)
-                        .padding(.bottom, 28)
+                        .padding(.bottom, 24)
 
-                    Text(hero.directive)
-                        .font(.system(size: 19, weight: .bold))
-                        .foregroundStyle(Color.fbText)
-                        .padding(.bottom, 20)
-
-                    Text(hero.heroDish)
-                        .font(.system(size: 22, weight: .heavy))
-                        .foregroundStyle(Self.warmAccent)
-                        .padding(.bottom, 8)
+                    if !hero.heroDish.isEmpty {
+                        Text(hero.heroDish)
+                            .font(.system(size: 22, weight: .heavy))
+                            .foregroundStyle(Self.warmAccent)
+                            .padding(.bottom, 8)
+                    }
 
                     ForEach(hero.supportingDishes, id: \.self) { dish in
                         Text(dish)
@@ -732,18 +785,17 @@ struct HomeTestView: View {
                             .padding(.bottom, 3)
                     }
 
-                    if let social = hero.socialProof {
+                    // Per-friend breakdown
+                    if !hero.friendSummaries.isEmpty {
+                        friendBreakdownSection(hero.friendSummaries)
+                            .padding(.top, 22)
+                    } else if let social = hero.socialProof {
+                        // Fallback for solo picks with no friend data
                         Text(social)
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundStyle(Self.warmAccent)
                             .padding(.top, 18)
                     }
-
-                    Text(hero.trustLine)
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundStyle(Self.warmAccent.opacity(0.8))
-                        .padding(.top, hero.socialProof == nil ? 18 : 8)
-                        .padding(.bottom, hero.changedConfidence == nil ? 36 : 10)
 
                     if let changed = hero.changedConfidence {
                         HStack(spacing: 6) {
@@ -754,7 +806,10 @@ struct HomeTestView: View {
                                 .font(.system(size: 12, weight: .medium))
                                 .foregroundStyle(Color(hex: "B0B0B4"))
                         }
+                        .padding(.top, hero.friendSummaries.isEmpty ? 18 : 10)
                         .padding(.bottom, 36)
+                    } else {
+                        Spacer().frame(height: 36)
                     }
 
                     detailCTAs(hero: hero)
@@ -775,12 +830,77 @@ struct HomeTestView: View {
         }
     }
 
+    // MARK: - Friend Breakdown (Detail Sheet)
+
+    private func friendBreakdownSection(_ summaries: [FriendVisitSummary]) -> some View {
+        let headerText: String = {
+            if summaries.count >= 3 {
+                return "\(summaries.count) FROM YOUR TABLE"
+            }
+            return "FROM YOUR TABLE"
+        }()
+
+        return VStack(alignment: .leading, spacing: 14) {
+            Text(headerText)
+                .font(.system(size: 11, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(Self.mutedGray)
+                .padding(.bottom, 2)
+
+            ForEach(summaries) { friend in
+                VStack(alignment: .leading, spacing: 4) {
+                    HStack(spacing: 0) {
+                        Text(friend.name)
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundStyle(Self.lightText)
+
+                        if friend.visitCount > 1 {
+                            Text(" \u{00B7} \(friend.visitCount) visits")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Self.dimGray)
+                        }
+
+                        Spacer()
+
+                        if !friend.recencyLabel.isEmpty {
+                            Text(friend.recencyLabel)
+                                .font(.system(size: 12, weight: .medium))
+                                .foregroundStyle(Self.dimGray)
+                        }
+                    }
+
+                    if !friend.likedDishes.isEmpty {
+                        let dishText = friend.likedDishes.count <= 2
+                            ? friend.likedDishes.joined(separator: ", ")
+                            : friend.likedDishes.prefix(2).joined(separator: ", ")
+                                + " +\(friend.likedDishes.count - 2) more"
+                        Text("Liked: \(dishText)")
+                            .font(.system(size: 13, weight: .medium))
+                            .foregroundStyle(Self.warmAccent.opacity(0.85))
+                    }
+                }
+                .padding(.vertical, 10)
+                .padding(.horizontal, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+            }
+        }
+    }
+
     private func detailCTAs(hero: HeroCardData) -> some View {
         VStack(spacing: 10) {
             Button {
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 commitPick(from: hero)
+                dismissRestaurant(hero.restaurant)
                 selectedHero = nil
+                // Give clear feedback: the place is noted, and we'll
+                // follow up after the visit to ask how it went.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                    showToastMessage("Noted \u{2014} we\u{2019}ll check in after your visit")
+                }
             } label: {
                 Text("Go here")
                     .font(.system(size: 16, weight: .bold))
@@ -801,9 +921,13 @@ struct HomeTestView: View {
 
             Button {
                 UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                dismissRestaurant(hero.restaurant)
                 prefillLog(for: hero)
                 selectedHero = nil
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+                // Wait for hero sheet dismiss animation to fully complete
+                // before presenting the add-place sheet, otherwise SwiftUI
+                // silently drops the second presentation.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
                     showAddPlace = true
                 }
             } label: {
@@ -824,6 +948,13 @@ struct HomeTestView: View {
             .buttonStyle(HomeCardPressStyle())
 
             Button {
+                // Actually save to the user's store so it appears in My Places
+                store.addQuick(
+                    name: hero.restaurant,
+                    address: hero.address,
+                    category: .saved
+                )
+                dismissRestaurant(hero.restaurant)
                 selectedHero = nil
             } label: {
                 Text("Save for later")
@@ -838,41 +969,6 @@ struct HomeTestView: View {
     // =========================================================================
     // MARK: - Copy Variant Logic
     // =========================================================================
-
-    enum DirectiveTier {
-        case standard
-        case elevated
-        case strongest
-    }
-
-    static func selectDirectiveTier(
-        trustedCount: Int,
-        repeatBehavior: Bool,
-        dishDominance: Bool,
-        recentSignal: Bool
-    ) -> DirectiveTier {
-        if (trustedCount >= 3 && recentSignal) || (dishDominance && trustedCount >= 3) {
-            return .strongest
-        }
-        if trustedCount >= 3 || repeatBehavior || dishDominance {
-            return .elevated
-        }
-        return .standard
-    }
-
-    static func buildDirective(tier: DirectiveTier, dish: String) -> String {
-        switch tier {
-        case .standard:
-            let t = ["Get the \(dish)", "Order the \(dish)", "Go for the \(dish)"]
-            return t[abs(dish.hashValue) % t.count]
-        case .elevated:
-            let t = ["Don\u{2019}t skip the \(dish)", "This is what to get here", "Go here for the \(dish)"]
-            return t[abs(dish.hashValue) % t.count]
-        case .strongest:
-            let t = ["This is the move \u{2014} \(dish)", "Have to try the \(dish)", "If you go, get the \(dish)"]
-            return t[abs(dish.hashValue) % t.count]
-        }
-    }
 
     enum TrustType {
         case names, count, recency, confidence
@@ -899,10 +995,20 @@ struct HomeTestView: View {
             // No circle yet — seed with mock data so the hero has table signal.
             self.tableMembers = MockTableData.buildMembers()
             self.tableRestaurants = MockTableData.buildSharedRestaurants()
+            self.usingMockData = true
             return
         }
-        let members = await firestoreService.getCircleMembers(circle: circle)
-        var restaurants = await firestoreService.getCircleRestaurants(circleId: circle.id)
+
+        // Fetch members and restaurants in parallel.
+        async let membersFetch = firestoreService.getCircleMembers(circle: circle)
+        async let restaurantsFetch = firestoreService.getCircleRestaurants(circleId: circle.id)
+        let members = await membersFetch
+        var restaurants = await restaurantsFetch
+
+        // Also import user's own Firestore entries using already-fetched data
+        // (avoids a duplicate getMyCircles + getCircleRestaurants round trip).
+        await store.importFromFirestore(prefetchedRestaurants: restaurants)
+
         let memberMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
         for i in restaurants.indices {
             restaurants[i].userName = memberMap[restaurants[i].userId] ?? "Friend"
@@ -913,9 +1019,11 @@ struct HomeTestView: View {
         if realFriends.isEmpty {
             self.tableMembers = members + MockTableData.buildMembers()
             self.tableRestaurants = restaurants + MockTableData.buildSharedRestaurants()
+            self.usingMockData = true
         } else {
             self.tableMembers = members
             self.tableRestaurants = restaurants
+            self.usingMockData = false
         }
     }
 
@@ -928,6 +1036,8 @@ struct HomeTestView: View {
         let name: String
         let cuisine: CuisineType
         let address: String
+        let latitude: Double?
+        let longitude: Double?
         let topDish: String?
         let supportingDishes: [String]
         let memberNames: [String]
@@ -994,6 +1104,8 @@ struct HomeTestView: View {
             }
             let recentCount = recentEntries.count
 
+            let isDiscovery = myEntry == nil   // user hasn't been here
+
             var score = 0
             score += names.count * 10
             score += totalVisits * 5
@@ -1002,11 +1114,18 @@ struct HomeTestView: View {
             if myEntry != nil { score += 5 }
             if myEntry?.reaction == .loved { score += 10 }
             if myEntry?.isGoTo == true { score += 8 }
+            if isDiscovery { score += 12 }        // discovery bonus — surface new-to-you places
             if let d = freshestDays, d <= 7 { score += 10 }
             score += recentCount * 4
 
             // Changed-confidence string — explain what's new
             let changed: String? = {
+                if isDiscovery && names.count >= 2 {
+                    return "New to you · \(names.count) friends love it"
+                }
+                if isDiscovery && names.count == 1 {
+                    return "New to you · \(names[0]) loves it"
+                }
                 if recentCount >= 2 && names.count >= 2 {
                     return "+\(recentCount) logs this week"
                 }
@@ -1037,10 +1156,14 @@ struct HomeTestView: View {
                 isGoTo: myEntry?.isGoTo ?? false
             )
 
+            // Prefer coordinates from any entry that has them.
+            let coordEntry = entries.first(where: { $0.hasCoordinates }) ?? ref
             out.append(ScoredCandidate(
                 name: ref.name,
                 cuisine: ref.cuisine,
                 address: ref.address,
+                latitude: coordEntry.latitude,
+                longitude: coordEntry.longitude,
                 topDish: topDish,
                 supportingDishes: Array(supporting),
                 memberNames: names,
@@ -1059,6 +1182,12 @@ struct HomeTestView: View {
         }
 
         // Solo user candidates (no table signal yet)
+        // Skip when using mock data — personal log may contain non-veg / irrelevant entries.
+        guard !usingMockData else {
+            return out
+                .filter { !dismissedNames.contains($0.name.lowercased()) }
+                .sorted { $0.score > $1.score }
+        }
         for r in myVisited {
             if namedFromTable.contains(r.name.lowercased()) { continue }
             // Only surface strong solo picks
@@ -1104,6 +1233,8 @@ struct HomeTestView: View {
                 name: r.name,
                 cuisine: r.cuisine,
                 address: r.address,
+                latitude: r.latitude,
+                longitude: r.longitude,
                 topDish: topDish,
                 supportingDishes: supporting,
                 memberNames: [],
@@ -1121,7 +1252,9 @@ struct HomeTestView: View {
             ))
         }
 
-        return out.sorted { $0.score > $1.score }
+        return out
+            .filter { !dismissedNames.contains($0.name.lowercased()) }
+            .sorted { $0.score > $1.score }
     }
 
     /// Candidates filtered + re-ranked for the currently-selected occasion chip.
@@ -1131,7 +1264,7 @@ struct HomeTestView: View {
         guard let tag = selectedOccasion else { return all }
         let threshold = OccasionClassifier.assignmentThreshold
 
-        return all
+        let filtered = all
             .compactMap { c -> (ScoredCandidate, Int)? in
                 let occ = c.occasionScores[tag] ?? 0
                 guard occ >= threshold else { return nil }
@@ -1141,6 +1274,11 @@ struct HomeTestView: View {
             }
             .sorted { $0.1 > $1.1 }
             .map { $0.0 }
+
+        // Fallback: if no restaurants match the chip, show all candidates
+        // rather than a blank screen. The hero eyebrow will still note
+        // the chip context so the user knows filtering was attempted.
+        return filtered.isEmpty ? all : filtered
     }
 
     /// Top 1 (or 2) as heroes, rest as backups.
@@ -1155,33 +1293,27 @@ struct HomeTestView: View {
     private var backupCards: [BackupCardData] {
         let candidates = candidatesForActiveOccasion
         guard candidates.count > 1 else { return [] }
-        return Array(candidates.dropFirst().prefix(5)).map { buildBackup(from: $0) }
+        return Array(candidates.dropFirst().prefix(12)).map { buildBackup(from: $0) }
     }
 
     // MARK: Candidate → Card
 
     private func buildHero(from c: ScoredCandidate) -> HeroCardData {
+        let dist = distanceText(lat: c.latitude, lng: c.longitude)
+        // Meta is rendered on the card as the subtitle line under the name.
+        // Distance now lives in its own slot on the name row, so meta becomes
+        // "Cuisine · City" — purely categorical context.
+        let where_ = locationLabel(lat: c.latitude, lng: c.longitude, address: c.address)
         let metaParts: [String] = {
             var p: [String] = []
             if c.cuisine != .other { p.append(c.cuisine.rawValue) }
-            let city = cityString(from: c.address)
-            if !city.isEmpty { p.append(city) }
+            if !where_.isEmpty { p.append(where_) }
             return p
         }()
         let meta = metaParts.joined(separator: " \u{00B7} ")
 
-        let dishDominance = c.topDishCount >= max(2, c.memberNames.count)
         let recent = (c.freshestDaysAgo ?? Int.max) <= 7
-        let tier = Self.selectDirectiveTier(
-            trustedCount: c.memberNames.count,
-            repeatBehavior: c.isRepeat,
-            dishDominance: dishDominance,
-            recentSignal: recent
-        )
-        let dish = c.topDish ?? "what they get"
-        let directive = c.topDish != nil
-            ? Self.buildDirective(tier: tier, dish: dish)
-            : (c.userLoved ? "You loved it here" : "Solid pick")
+        let dish = c.topDish ?? ""
 
         let eyebrow: String = {
             // When an occasion chip is active and we have any table signal,
@@ -1190,7 +1322,7 @@ struct HomeTestView: View {
                 return "FROM YOUR TABLE"
             }
             if c.memberNames.count >= 3 {
-                return "YOUR TABLE\u{2019}S PICK FOR TONIGHT"
+                return "YOUR TABLE\u{2019}S PICK FOR \(MealWindow.current.eyebrowFragment)"
             }
             if c.isRepeat && c.memberNames.count >= 1 {
                 return "YOUR TABLE KEEPS ORDERING THIS"
@@ -1228,60 +1360,91 @@ struct HomeTestView: View {
             return c.changedConfidence
         }()
 
+        // Build per-friend visit summaries from raw table entries.
+        let now = Date()
+        let friendEntries = tableRestaurants.filter { $0.userId != currentUid }
+        let entriesForPlace = friendEntries.filter { $0.name.lowercased() == c.name.lowercased() }
+        // Group by user to collapse multiple entries per friend.
+        let byUser = Dictionary(grouping: entriesForPlace, by: { $0.userId })
+        let summaries: [FriendVisitSummary] = byUser.values.compactMap { entries in
+            guard let first = entries.first else { return nil }
+            let name = first.userName.components(separatedBy: " ").first ?? first.userName
+            let totalVisits = entries.reduce(0) { $0 + max(1, $1.visitCount) }
+            let dishes = Array(Set(entries.flatMap { $0.likedDishes.map(\.name) }))
+            let freshestDays: Int? = entries
+                .compactMap { $0.dateVisited }
+                .map { Calendar.current.dateComponents([.day], from: $0, to: now).day ?? 999 }
+                .min()
+            return FriendVisitSummary(
+                name: name,
+                visitCount: totalVisits,
+                likedDishes: dishes,
+                daysAgo: freshestDays
+            )
+        }.sorted { ($0.daysAgo ?? 999) < ($1.daysAgo ?? 999) }
+
         return HeroCardData(
             eyebrow: eyebrow,
             restaurant: c.name,
             meta: meta,
-            directive: directive,
             heroDish: dish,
             supportingDishes: c.supportingDishes,
             trustLine: trustLine,
             socialProof: socialProof,
             changedConfidence: changed,
+            friendSummaries: summaries,
+            distanceText: dist,
             address: c.address,
             cuisine: c.cuisine
         )
     }
 
     private func buildBackup(from c: ScoredCandidate) -> BackupCardData {
+        let dist = distanceText(lat: c.latitude, lng: c.longitude)
+        // Meta is "Cuisine · City" — distance now lives in its own slot on
+        // the name row (mirrors hero card layout).
+        let where_ = locationLabel(lat: c.latitude, lng: c.longitude, address: c.address)
         let metaParts: [String] = {
             var p: [String] = []
             if c.cuisine != .other { p.append(c.cuisine.rawValue) }
-            let city = cityString(from: c.address)
-            if !city.isEmpty { p.append(city) }
+            if !where_.isEmpty { p.append(where_) }
             return p
         }()
         let meta = metaParts.joined(separator: " \u{00B7} ")
 
-        let dishDominance = c.topDishCount >= max(2, c.memberNames.count)
-        let recent = (c.freshestDaysAgo ?? Int.max) <= 7
-        let tier = Self.selectDirectiveTier(
-            trustedCount: c.memberNames.count,
-            repeatBehavior: c.isRepeat,
-            dishDominance: dishDominance,
-            recentSignal: recent
-        )
-        let directive: String = {
-            if let d = c.topDish { return Self.buildDirective(tier: tier, dish: d) }
-            if c.userIsGoTo { return "You always go back" }
-            if c.userLoved { return "You loved it" }
-            return "Worth it"
-        }()
         let trustLine = buildTrustLine(
             names: c.memberNames,
             visits: c.totalTableVisits,
             userSignal: userSignalText(c)
         )
 
+        // Build per-friend visit summaries (same logic as buildHero).
+        let now = Date()
+        let friendEntries = tableRestaurants.filter { $0.userId != currentUid }
+        let entriesForPlace = friendEntries.filter { $0.name.lowercased() == c.name.lowercased() }
+        let byUser = Dictionary(grouping: entriesForPlace, by: { $0.userId })
+        let summaries: [FriendVisitSummary] = byUser.values.compactMap { entries in
+            guard let first = entries.first else { return nil }
+            let name = first.userName.components(separatedBy: " ").first ?? first.userName
+            let totalVisits = entries.reduce(0) { $0 + max(1, $1.visitCount) }
+            let dishes = Array(Set(entries.flatMap { $0.likedDishes.map(\.name) }))
+            let freshestDays: Int? = entries
+                .compactMap { $0.dateVisited }
+                .map { Calendar.current.dateComponents([.day], from: $0, to: now).day ?? 999 }
+                .min()
+            return FriendVisitSummary(name: name, visitCount: totalVisits, likedDishes: dishes, daysAgo: freshestDays)
+        }.sorted { ($0.daysAgo ?? 999) < ($1.daysAgo ?? 999) }
+
         return BackupCardData(
             restaurant: c.name,
             meta: meta,
-            directive: directive,
-            heroDish: c.topDish ?? extractDish(from: directive),
+            heroDish: c.topDish ?? "",
             supportingDishes: c.supportingDishes,
             trustLine: trustLine,
             socialProof: nil,      // kept off backups — hero carries the warm line
             changedConfidence: c.changedConfidence,
+            friendSummaries: summaries,
+            distanceText: dist,
             address: c.address,
             cuisine: c.cuisine
         )
@@ -1294,36 +1457,124 @@ struct HomeTestView: View {
         return nil
     }
 
+    /// Social-proof line under the dishes: "Picked by X from your table" /
+    /// "Picked by A & B" / "Picked by A". Visits are counted in the scoring
+    /// step but the display collapses to unique names here — "picked by 4
+    /// people" reads cleaner than "7 visits."
     private func buildTrustLine(names: [String], visits: Int, userSignal: String?) -> String {
-        // Prefer cross-table signal when present
-        if visits >= 3 {
-            return "\(visits) visits from your table"
-        }
+        _ = visits   // retained in signature for call-site stability
         if names.count >= 3 {
-            return "\(names[0]), \(names[1]) & \(names.count - 2) more"
+            return "Picked by \(names.count) from your table"
         }
         if names.count == 2 {
-            return "\(names[0]) & \(names[1]) both order this"
+            return "Picked by \(names[0]) & \(names[1])"
         }
         if let name = names.first {
-            return "\(name) from your table"
+            return "Picked by \(name)"
         }
-        // Fall back to user signal
         if let u = userSignal { return u }
         return "Worth exploring"
     }
 
+    private func distanceText(lat: Double?, lng: Double?) -> String? {
+        guard let lat, let lng,
+              let miles = locationManager.distanceMiles(to: lat, lng: lng)
+        else { return nil }
+        return LocationManager.formatDistance(miles)
+    }
+
+    /// Representative centers for major SF neighborhoods, used by
+    /// `sfNeighborhood(lat:lng:)` via nearest-center lookup. Not a polygon
+    /// map — it's intentionally approximate; a point near the edge of two
+    /// neighborhoods may fall either way. Good enough for the card meta.
+    private static let sfNeighborhoods: [(name: String, lat: Double, lng: Double)] = [
+        ("Marina",             37.8037, -122.4368),
+        ("Pacific Heights",    37.7927, -122.4362),
+        ("Presidio Heights",   37.7877, -122.4520),
+        ("Russian Hill",       37.8018, -122.4180),
+        ("Nob Hill",           37.7930, -122.4161),
+        ("North Beach",        37.8060, -122.4103),
+        ("Chinatown",          37.7941, -122.4078),
+        ("Financial District", 37.7946, -122.3996),
+        ("Union Square",       37.7880, -122.4075),
+        ("Tenderloin",         37.7845, -122.4130),
+        ("Fillmore",           37.7843, -122.4324),
+        ("Japantown",          37.7848, -122.4296),
+        ("Hayes Valley",       37.7759, -122.4245),
+        ("Lower Haight",       37.7719, -122.4320),
+        ("Haight-Ashbury",     37.7699, -122.4469),
+        ("Cole Valley",        37.7653, -122.4509),
+        ("Castro",             37.7609, -122.4350),
+        ("Noe Valley",         37.7505, -122.4333),
+        ("Mission",            37.7599, -122.4148),
+        ("SoMa",               37.7790, -122.4050),
+        ("Mission Bay",        37.7706, -122.3895),
+        ("Potrero Hill",       37.7600, -122.4000),
+        ("Dogpatch",           37.7570, -122.3890),
+        ("Bernal Heights",     37.7396, -122.4147),
+        ("Inner Sunset",       37.7640, -122.4665),
+        ("Outer Sunset",       37.7550, -122.4950),
+        ("Inner Richmond",     37.7796, -122.4648),
+        ("Outer Richmond",     37.7795, -122.4900),
+    ]
+
+    /// Returns the closest SF neighborhood name for the given point, or nil
+    /// if the point is outside the rough SF bounding box. Uses squared
+    /// lat/lng distance — fine for a coarse nearest-neighbor at this scale.
+    private static func sfNeighborhood(lat: Double, lng: Double) -> String? {
+        // Rough SF bounding box — skip lookup for points obviously elsewhere.
+        guard lat >= 37.70, lat <= 37.83,
+              lng >= -122.52, lng <= -122.36 else { return nil }
+        let nearest = sfNeighborhoods.min { a, b in
+            let da = (a.lat - lat) * (a.lat - lat) + (a.lng - lng) * (a.lng - lng)
+            let db = (b.lat - lat) * (b.lat - lat) + (b.lng - lng) * (b.lng - lng)
+            return da < db
+        }
+        return nearest?.name
+    }
+
+    /// Prefer the SF neighborhood name when coordinates are available and
+    /// fall inside the city; otherwise use the broader city string parsed
+    /// from the address. The meta line should feel local ("Mission") when
+    /// we can, and stay correct ("Oakland", "Austin") when we can't.
+    private func locationLabel(lat: Double?, lng: Double?, address: String) -> String {
+        if let lat, let lng,
+           let hood = Self.sfNeighborhood(lat: lat, lng: lng) {
+            return hood
+        }
+        return cityString(from: address)
+    }
+
+    /// Extracts just the city from a free-form address. Handles the common
+    /// mock-data shape "Street, City" (2 parts), the fuller "Street, City,
+    /// State Zip" (3+ parts), and bare "City" (1 part). If the first comma
+    /// segment looks like a street (starts with a digit, or ends in a known
+    /// street suffix), the city is the next segment; otherwise the first
+    /// segment already *is* the city.
     private func cityString(from address: String) -> String {
         let parts = address
             .components(separatedBy: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
             .filter { !$0.isEmpty }
-        guard parts.count >= 2 else { return parts.first ?? "" }
-        // "Street, City, State Zip[, Country]" → City
-        if parts.count >= 3, let first = parts.first, first.first?.isNumber == true {
+        guard !parts.isEmpty else { return "" }
+
+        let streetSuffixes: Set<String> = [
+            "st", "st.", "street", "ave", "ave.", "avenue", "blvd", "blvd.",
+            "rd", "rd.", "road", "way", "ln", "lane", "dr", "dr.", "drive",
+            "pl", "ct", "pkwy", "parkway", "hwy", "highway", "sq", "square",
+            "ter", "terrace"
+        ]
+        func looksLikeStreet(_ s: String) -> Bool {
+            if let first = s.first, first.isNumber { return true }
+            let lastWord = (s.components(separatedBy: .whitespaces).last ?? "")
+                .lowercased()
+            return streetSuffixes.contains(lastWord)
+        }
+
+        if parts.count >= 2, looksLikeStreet(parts[0]) {
             return parts[1]
         }
-        return parts.first ?? ""
+        return parts[0]
     }
 }
 
@@ -1331,17 +1582,37 @@ struct HomeTestView: View {
 // MARK: - Data Models
 // =========================================================================
 
+/// Per-friend visit detail for the detail sheet.
+struct FriendVisitSummary: Identifiable {
+    let id = UUID()
+    let name: String               // "Pragya"
+    let visitCount: Int
+    let likedDishes: [String]      // dishes they liked
+    let daysAgo: Int?              // days since their most recent visit
+    var recencyLabel: String {
+        guard let d = daysAgo else { return "" }
+        if d == 0 { return "today" }
+        if d == 1 { return "yesterday" }
+        if d < 7 { return "\(d) days ago" }
+        if d < 14 { return "last week" }
+        if d < 30 { return "\(d / 7) weeks ago" }
+        if d < 60 { return "last month" }
+        return "\(d / 30) months ago"
+    }
+}
+
 struct HeroCardData: Identifiable {
     let id = UUID()
     let eyebrow: String
     let restaurant: String
     let meta: String
-    let directive: String
     let heroDish: String
     let supportingDishes: [String]
     let trustLine: String
     let socialProof: String?
     let changedConfidence: String?
+    let friendSummaries: [FriendVisitSummary]
+    let distanceText: String?
 
     // Needed for CommittedPick persistence — not rendered directly on the card.
     var address: String = ""
@@ -1352,12 +1623,13 @@ struct BackupCardData: Identifiable {
     let id = UUID()
     let restaurant: String
     let meta: String
-    let directive: String
     let heroDish: String
     let supportingDishes: [String]
     let trustLine: String
     let socialProof: String?
     let changedConfidence: String?
+    let friendSummaries: [FriendVisitSummary]
+    let distanceText: String?
 
     var address: String = ""
     var cuisine: CuisineType = .other

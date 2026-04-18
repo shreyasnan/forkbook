@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ForkBook V2 — Vision Wireframe</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; font-family: -apple-system, BlinkMacSystemFont, 'SF Pro', sans-serif; color: #fff; display: flex; justify-content: center; padding: 20px; }
+  .container { display: flex; gap: 32px; flex-wrap: wrap; justify-content: center; }
+  .phone { width: 375px; height: 812px; background: #000; border-radius: 40px; border: 3px solid #333; overflow: hidden; position: relative; flex-shrink: 0; }
+  .phone-label { text-align: center; font-size: 13px; color: #888; margin-bottom: 8px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; }
+  .status-bar { height: 54px; display: flex; align-items: flex-end; justify-content: center; padding-bottom: 8px; font-size: 12px; color: #999; font-weight: 600; }
+  .screen { height: calc(100% - 54px - 83px); overflow-y: auto; }
+  .screen::-webkit-scrollbar { display: none; }
+  .tab-bar { position: absolute; bottom: 0; left: 0; right: 0; height: 83px; background: #0a0a0a; border-top: 0.5px solid #222; display: flex; justify-content: space-around; align-items: flex-start; padding-top: 10px; }
+  .tab { display: flex; flex-direction: column; align-items: center; gap: 3px; font-size: 10px; color: #666; }
+  .tab.active { color: #fff; }
+  .tab .icon { font-size: 22px; }
+
+  /* Shared */
+  .section-title { font-size: 20px; font-weight: 700; padding: 0 20px; }
+  .section-sub { font-size: 13px; color: #888; padding: 0 20px; margin-top: 2px; }
+  .card { background: #1a1a1a; border-radius: 14px; padding: 16px; margin: 0 16px 10px; }
+  .divider { height: 6px; background: #111; margin: 16px 0; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 6px 14px; border-radius: 20px; font-size: 13px; font-weight: 600; cursor: pointer; border: 1.5px solid #333; background: #1a1a1a; color: #ccc; margin: 3px; }
+  .pill.active { border-color: #3897f0; background: rgba(56,151,240,0.12); color: #3897f0; }
+  .pill.green { border-color: #4caf50; background: rgba(76,175,80,0.12); color: #4caf50; }
+  .pill.red { border-color: #ef5350; background: rgba(239,83,80,0.12); color: #ef5350; }
+  .pill.orange { border-color: #ff9800; background: rgba(255,152,0,0.12); color: #ff9800; }
+
+  /* HOME TAB */
+  .home-header { padding: 16px 20px; display: flex; justify-content: space-between; align-items: center; }
+  .home-greeting { font-size: 22px; font-weight: 700; }
+  .home-sub { font-size: 14px; color: #888; margin-top: 2px; }
+  .avatar { width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, #833ab4, #fd1d1d, #fcb045); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 16px; }
+  .rec-card { background: #1a1a1a; border-radius: 14px; padding: 14px; margin: 0 16px 10px; display: flex; gap: 12px; align-items: center; }
+  .rec-icon { width: 48px; height: 48px; border-radius: 12px; background: #222; display: flex; align-items: center; justify-content: center; font-size: 24px; }
+  .rec-info { flex: 1; }
+  .rec-name { font-size: 15px; font-weight: 700; }
+  .rec-reason { font-size: 12px; color: #888; margin-top: 2px; }
+  .rec-tag { font-size: 11px; color: #ff9800; margin-top: 4px; }
+  .rec-badge { font-size: 11px; color: #888; padding: 3px 8px; background: #222; border-radius: 10px; }
+  .signal-tag { display: inline-block; font-size: 10px; padding: 3px 8px; border-radius: 8px; margin-top: 4px; }
+  .signal-new { background: rgba(156,39,176,0.15); color: #ce93d8; }
+  .signal-fav { background: rgba(239,83,80,0.15); color: #ef9a9a; }
+  .signal-variety { background: rgba(56,151,240,0.15); color: #90caf9; }
+  .signal-table { background: rgba(76,175,80,0.15); color: #a5d6a7; }
+  .signal-trending { background: rgba(255,152,0,0.15); color: #ffcc80; }
+
+  /* Q&A FLOW */
+  .qa-question { font-size: 24px; font-weight: 700; text-align: center; padding: 30px 30px 10px; line-height: 1.3; }
+  .qa-sub { font-size: 14px; color: #888; text-align: center; padding: 0 30px; margin-bottom: 24px; }
+  .qa-options { display: flex; flex-direction: column; gap: 10px; padding: 0 24px; }
+  .qa-option { padding: 18px 20px; border-radius: 16px; border: 2px solid #333; background: #1a1a1a; font-size: 17px; font-weight: 600; cursor: pointer; display: flex; align-items: center; gap: 12px; transition: all 0.15s; }
+  .qa-option:hover { border-color: #3897f0; }
+  .qa-option.selected { border-color: #3897f0; background: rgba(56,151,240,0.08); }
+  .qa-option .emoji { font-size: 24px; }
+  .qa-option .label { flex: 1; }
+  .qa-option .sublabel { font-size: 12px; color: #888; font-weight: 400; margin-top: 2px; }
+  .qa-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; padding: 0 24px; }
+  .qa-grid-item { padding: 16px; border-radius: 14px; border: 2px solid #333; background: #1a1a1a; text-align: center; cursor: pointer; }
+  .qa-grid-item .emoji { font-size: 28px; display: block; margin-bottom: 6px; }
+  .qa-grid-item .label { font-size: 14px; font-weight: 600; }
+  .qa-progress { display: flex; gap: 6px; justify-content: center; padding: 12px; }
+  .qa-dot { width: 24px; height: 3px; border-radius: 2px; background: #333; }
+  .qa-dot.done { background: #4caf50; }
+  .qa-dot.current { background: #3897f0; width: 32px; }
+  .qa-step-num { font-size: 12px; color: #666; text-align: center; margin-top: 4px; }
+  .qa-skip { font-size: 14px; color: #666; text-align: center; padding: 16px; cursor: pointer; }
+  .qa-dish-input { background: #222; border: 1px solid #333; border-radius: 12px; padding: 14px; margin: 0 24px; display: flex; gap: 10px; align-items: center; color: #666; font-size: 15px; }
+  .qa-dishes { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 24px; }
+  .flow-note { font-size: 11px; color: #555; text-align: center; padding: 8px 30px; font-style: italic; }
+
+  /* TABLE TAB */
+  .member-card { background: #1a1a1a; border-radius: 16px; padding: 16px; margin: 0 16px 10px; display: flex; gap: 14px; align-items: center; cursor: pointer; }
+  .member-avatar { width: 52px; height: 52px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+  .member-info { flex: 1; }
+  .member-name { font-size: 16px; font-weight: 700; }
+  .member-stats { font-size: 12px; color: #888; margin-top: 2px; }
+  .member-latest { font-size: 12px; color: #666; margin-top: 4px; }
+  .member-latest em { color: #999; font-style: normal; }
+  .chevron { color: #555; font-size: 14px; }
+  .invite-banner { background: linear-gradient(135deg, rgba(56,151,240,0.12), rgba(131,58,180,0.12)); border: 1.5px solid rgba(56,151,240,0.3); border-radius: 14px; padding: 16px; margin: 0 16px 12px; text-align: center; }
+  .invite-banner .title { font-size: 15px; font-weight: 700; }
+  .invite-banner .sub { font-size: 12px; color: #888; margin-top: 4px; }
+
+  /* SEARCH TAB */
+  .search-bar { margin: 8px 16px; padding: 14px 16px; background: #1a1a1a; border: 1px solid #333; border-radius: 12px; display: flex; gap: 10px; align-items: center; color: #666; font-size: 15px; }
+  .popular-label { font-size: 12px; font-weight: 600; color: #666; letter-spacing: 0.5px; text-transform: uppercase; padding: 12px 20px 6px; }
+  .restaurant-row { display: flex; gap: 12px; align-items: center; padding: 12px 20px; }
+  .restaurant-row:hover { background: #111; }
+  .r-icon { width: 40px; height: 40px; border-radius: 10px; background: #222; display: flex; align-items: center; justify-content: center; font-size: 20px; }
+  .r-name { font-size: 15px; font-weight: 600; }
+  .r-detail { font-size: 12px; color: #888; margin-top: 1px; }
+  .r-select { width: 22px; height: 22px; border-radius: 50%; border: 2px solid #333; }
+  .r-select.on { border-color: #3897f0; background: #3897f0; }
+
+  .screen-label { background: rgba(56,151,240,0.1); color: #3897f0; font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 6px; display: inline-block; margin: 12px 20px 8px; letter-spacing: 0.5px; }
+</style>
+</head>
+<body>
+
+<div class="container">
+
+<!-- ==================== HOME TAB ==================== -->
+<div>
+  <div class="phone-label">Home — AI Recommendations</div>
+  <div class="phone">
+    <div class="status-bar">9:41</div>
+    <div class="screen">
+      <div class="home-header">
+        <div>
+          <div class="home-greeting">Good evening, Shreyas</div>
+          <div class="home-sub">Here's what we think you'd love</div>
+        </div>
+        <div class="avatar">S</div>
+      </div>
+
+      <div class="screen-label">PERSONALIZED FOR YOU</div>
+
+      <div class="rec-card">
+        <div class="rec-icon">🍣</div>
+        <div class="rec-info">
+          <div class="rec-name">Ju-Ni</div>
+          <div class="rec-reason">Priya & Raj loved this — you haven't tried it</div>
+          <div><span class="signal-tag signal-table">👥 Table favorite</span></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="rec-card">
+        <div class="rec-icon">🍜</div>
+        <div class="rec-info">
+          <div class="rec-name">Han Il Kwan</div>
+          <div class="rec-reason">You haven't had Korean in 3 weeks</div>
+          <div><span class="signal-tag signal-variety">🎲 Try something new</span></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="rec-card">
+        <div class="rec-icon">🍛</div>
+        <div class="rec-info">
+          <div class="rec-name">Dosa Point</div>
+          <div class="rec-reason">Indian is your #1 cuisine — 2 table members loved this</div>
+          <div><span class="signal-tag signal-fav">❤️ Your favorite cuisine</span></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="rec-card">
+        <div class="rec-icon">🌮</div>
+        <div class="rec-info">
+          <div class="rec-name">La Taqueria</div>
+          <div class="rec-reason">Trending with 3 table visits this month</div>
+          <div><span class="signal-tag signal-trending">🔥 Trending on your table</span></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="rec-card">
+        <div class="rec-icon">🥗</div>
+        <div class="rec-info">
+          <div class="rec-name">Souvla</div>
+          <div class="rec-reason">Mediterranean — a cuisine you've never tried</div>
+          <div><span class="signal-tag signal-new">✨ Discover new</span></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="divider"></div>
+
+      <div style="padding: 0 20px 8px;">
+        <div class="section-title" style="font-size: 16px;">Why these picks?</div>
+        <div style="font-size: 12px; color: #666; margin-top: 6px; line-height: 1.6;">
+          Based on your taste profile, table members' favorites, cuisine variety, and what's popular. Updates as you log more visits.
+        </div>
+      </div>
+
+      <div style="height: 30px;"></div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab active"><span class="icon">🏠</span>Home</div>
+      <div class="tab"><span class="icon">🔍</span>Search</div>
+      <div class="tab"><span class="icon">👥</span>My Table</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== SEARCH TAB ==================== -->
+<div>
+  <div class="phone-label">Search — Find & Log</div>
+  <div class="phone">
+    <div class="status-bar">9:41</div>
+    <div class="screen">
+      <div style="padding: 16px 20px 8px;">
+        <div class="section-title">Search</div>
+      </div>
+
+      <div class="search-bar">
+        <span>🔍</span>
+        <span>Search restaurants...</span>
+      </div>
+
+      <div class="popular-label">YOUR TABLE'S RECENT</div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🍣</div>
+        <div style="flex:1">
+          <div class="r-name">Robin</div>
+          <div class="r-detail">Japanese · Priya went last week</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🍝</div>
+        <div style="flex:1">
+          <div class="r-name">Flour + Water</div>
+          <div class="r-detail">Italian · Raj went 3 days ago</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🍛</div>
+        <div style="flex:1">
+          <div class="r-name">Dosa Point</div>
+          <div class="r-detail">Indian · You went 2 weeks ago</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div class="popular-label">POPULAR</div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🍜</div>
+        <div style="flex:1">
+          <div class="r-name">Marufuku Ramen</div>
+          <div class="r-detail">Japanese · Ramen</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🌮</div>
+        <div style="flex:1">
+          <div class="r-name">La Taqueria</div>
+          <div class="r-detail">Mexican · Mission District</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🥟</div>
+        <div style="flex:1">
+          <div class="r-name">Dragon Beaux</div>
+          <div class="r-detail">Chinese · Dim Sum</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div class="restaurant-row">
+        <div class="r-icon">🍔</div>
+        <div style="flex:1">
+          <div class="r-name">Super Duper Burgers</div>
+          <div class="r-detail">American · Burgers</div>
+        </div>
+        <div class="r-select"></div>
+      </div>
+
+      <div style="height: 20px;"></div>
+
+      <div class="flow-note">Select a restaurant → starts the log flow</div>
+      <div class="flow-note">Single select only · tap again to deselect</div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab"><span class="icon">🏠</span>Home</div>
+      <div class="tab active"><span class="icon">🔍</span>Search</div>
+      <div class="tab"><span class="icon">👥</span>My Table</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== Q&A FLOW ==================== -->
+<div>
+  <div class="phone-label">Q&A Log Flow — Step by Step</div>
+  <div class="phone">
+    <div class="status-bar">9:41</div>
+    <div class="screen">
+
+      <!-- Step 1: How was it? -->
+      <div class="qa-progress">
+        <div class="qa-dot current"></div>
+        <div class="qa-dot"></div>
+        <div class="qa-dot"></div>
+        <div class="qa-dot"></div>
+      </div>
+
+      <div style="text-align: center; padding: 8px 20px;">
+        <div style="font-size: 13px; color: #888;">You went to</div>
+        <div style="font-size: 18px; font-weight: 700; margin-top: 4px;">🍣 Robin</div>
+      </div>
+
+      <div class="qa-question">How was it?</div>
+      <div class="qa-sub">One tap, that's it</div>
+
+      <div class="qa-options">
+        <div class="qa-option">
+          <span class="emoji">❤️</span>
+          <div>
+            <div class="label">Loved it</div>
+            <div class="sublabel">Can't stop thinking about it</div>
+          </div>
+        </div>
+        <div class="qa-option selected">
+          <span class="emoji">👍</span>
+          <div>
+            <div class="label">Liked it</div>
+            <div class="sublabel">Would go again</div>
+          </div>
+        </div>
+        <div class="qa-option">
+          <span class="emoji">😐</span>
+          <div>
+            <div class="label">Meh</div>
+            <div class="sublabel">Wouldn't rush back</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-note" style="margin-top: 20px;">↓ auto-advances on tap</div>
+
+      <div class="divider"></div>
+
+      <!-- Step 2: What was the vibe? -->
+      <div class="qa-progress">
+        <div class="qa-dot done"></div>
+        <div class="qa-dot current"></div>
+        <div class="qa-dot"></div>
+        <div class="qa-dot"></div>
+      </div>
+
+      <div class="qa-question" style="font-size: 22px;">What was the vibe?</div>
+      <div class="qa-sub">Pick one</div>
+
+      <div class="qa-grid">
+        <div class="qa-grid-item"><span class="emoji">🌙</span><span class="label">Date night</span></div>
+        <div class="qa-grid-item" style="border-color: #3897f0; background: rgba(56,151,240,0.08);"><span class="emoji">👥</span><span class="label">Group dinner</span></div>
+        <div class="qa-grid-item"><span class="emoji">⚡</span><span class="label">Quick bite</span></div>
+        <div class="qa-grid-item"><span class="emoji">👨‍👩‍👧</span><span class="label">Family</span></div>
+        <div class="qa-grid-item"><span class="emoji">💼</span><span class="label">Business</span></div>
+        <div class="qa-grid-item"><span class="emoji">🎉</span><span class="label">Celebration</span></div>
+      </div>
+
+      <div class="qa-skip">Skip →</div>
+      <div class="flow-note">Only shows if Loved or Liked<br>Meh → skips straight to "anything to avoid?"</div>
+
+      <div class="divider"></div>
+
+      <!-- Step 3: Best dish? -->
+      <div class="qa-progress">
+        <div class="qa-dot done"></div>
+        <div class="qa-dot done"></div>
+        <div class="qa-dot current"></div>
+        <div class="qa-dot"></div>
+      </div>
+
+      <div class="qa-question" style="font-size: 22px;">Best dish?</div>
+      <div class="qa-sub">What should people order here</div>
+
+      <div class="qa-dish-input">
+        <span>🔍</span> Type a dish...
+      </div>
+
+      <div style="padding: 8px 20px 4px;">
+        <div style="font-size: 11px; color: #666; font-weight: 600; letter-spacing: 0.5px;">SUGGESTIONS</div>
+      </div>
+      <div class="qa-dishes">
+        <span class="pill green">👍 Omakase</span>
+        <span class="pill">Uni Toast</span>
+        <span class="pill">A5 Wagyu</span>
+        <span class="pill">Hamachi Crudo</span>
+        <span class="pill red">👎 Miso Soup</span>
+      </div>
+
+      <div class="qa-skip">Skip →</div>
+      <div class="flow-note">Tap = 👍, tap again = 👎, tap again = deselect<br>Autocomplete from DB + table data</div>
+
+      <div class="divider"></div>
+
+      <!-- Step 4: Recommend? -->
+      <div class="qa-progress">
+        <div class="qa-dot done"></div>
+        <div class="qa-dot done"></div>
+        <div class="qa-dot done"></div>
+        <div class="qa-dot current"></div>
+      </div>
+
+      <div class="qa-question" style="font-size: 22px;">Recommend to your table?</div>
+      <div class="qa-sub">This helps rank it for your friends</div>
+
+      <div class="qa-options">
+        <div class="qa-option selected">
+          <span class="emoji">🔥</span>
+          <div>
+            <div class="label">Must go!</div>
+            <div class="sublabel">Everyone needs to try this</div>
+          </div>
+        </div>
+        <div class="qa-option">
+          <span class="emoji">👌</span>
+          <div>
+            <div class="label">It's solid</div>
+            <div class="sublabel">Good if it's your kind of food</div>
+          </div>
+        </div>
+        <div class="qa-option">
+          <span class="emoji">🤷</span>
+          <div>
+            <div class="label">Nah, skip it</div>
+            <div class="sublabel">Wouldn't send friends here</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="flow-note" style="margin-top: 16px;">Only shows if Loved or Liked<br>Meh → auto "skip it" and done</div>
+
+      <div style="height: 30px;"></div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab"><span class="icon">🏠</span>Home</div>
+      <div class="tab active"><span class="icon">🔍</span>Search</div>
+      <div class="tab"><span class="icon">👥</span>My Table</div>
+    </div>
+  </div>
+</div>
+
+<!-- ==================== MY TABLE TAB ==================== -->
+<div>
+  <div class="phone-label">My Table — People First</div>
+  <div class="phone">
+    <div class="status-bar">9:41</div>
+    <div class="screen">
+      <div style="padding: 16px 20px 4px; display: flex; justify-content: space-between; align-items: center;">
+        <div class="section-title">My Table</div>
+        <span style="font-size: 20px; color: #ccc;">⋯</span>
+      </div>
+      <div class="section-sub" style="margin-bottom: 12px;">Your trusted food crew</div>
+
+      <!-- Invite banner -->
+      <div class="invite-banner">
+        <div class="title">👋 Invite friends to your table</div>
+        <div class="sub">Share your invite code · Keep it small (10-15 people)</div>
+      </div>
+
+      <!-- Pending request -->
+      <div class="card" style="border: 1.5px solid rgba(255,152,0,0.3); background: rgba(255,152,0,0.05);">
+        <div style="display: flex; align-items: center; gap: 12px;">
+          <div class="member-avatar" style="width:40px; height:40px; background: rgba(255,152,0,0.15); color: #ff9800; font-size: 16px;">A</div>
+          <div style="flex:1;">
+            <div style="font-size: 14px; font-weight: 600;">Ankit wants to join</div>
+          </div>
+          <span class="pill active" style="margin:0; font-size: 12px;">Accept</span>
+          <span class="pill" style="margin:0; font-size: 12px;">Decline</span>
+        </div>
+      </div>
+
+      <div class="popular-label">MEMBERS · 5</div>
+
+      <!-- Member cards -->
+      <div class="member-card">
+        <div class="member-avatar" style="background: linear-gradient(135deg, #833ab4, #fd1d1d); color: #fff;">P</div>
+        <div class="member-info">
+          <div class="member-name">Priya</div>
+          <div class="member-stats">12 places · 8 loved · Top: Japanese</div>
+          <div class="member-latest">Latest: <em>❤️ Ju-Ni · 2 days ago</em></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="member-card">
+        <div class="member-avatar" style="background: linear-gradient(135deg, #3897f0, #833ab4); color: #fff;">R</div>
+        <div class="member-info">
+          <div class="member-name">Raj</div>
+          <div class="member-stats">9 places · 5 loved · Top: Indian</div>
+          <div class="member-latest">Latest: <em>👍 Flour + Water · 3 days ago</em></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="member-card">
+        <div class="member-avatar" style="background: linear-gradient(135deg, #fcb045, #fd1d1d); color: #fff;">M</div>
+        <div class="member-info">
+          <div class="member-name">Maya</div>
+          <div class="member-stats">15 places · 10 loved · Top: Italian</div>
+          <div class="member-latest">Latest: <em>❤️ Delfina · 1 week ago</em></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="member-card">
+        <div class="member-avatar" style="background: linear-gradient(135deg, #4caf50, #2196f3); color: #fff;">N</div>
+        <div class="member-info">
+          <div class="member-name">Nikhil</div>
+          <div class="member-stats">7 places · 4 loved · Top: Chinese</div>
+          <div class="member-latest">Latest: <em>👍 Dragon Beaux · 1 week ago</em></div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div class="member-card" style="opacity: 0.5;">
+        <div class="member-avatar" style="background: #333; color: #888;">S</div>
+        <div class="member-info">
+          <div class="member-name">You</div>
+          <div class="member-stats">View your profile →</div>
+        </div>
+        <span class="chevron">›</span>
+      </div>
+
+      <div style="height: 30px;"></div>
+
+      <div class="flow-note">Tap a member → see their full restaurant history,<br>favorites, top dishes, and taste profile</div>
+
+      <div style="height: 20px;"></div>
+    </div>
+
+    <div class="tab-bar">
+      <div class="tab"><span class="icon">🏠</span>Home</div>
+      <div class="tab"><span class="icon">🔍</span>Search</div>
+      <div class="tab active"><span class="icon">👥</span>My Table</div>
+    </div>
+  </div>
+</div>
+
+</div>
+</body>
+</html>

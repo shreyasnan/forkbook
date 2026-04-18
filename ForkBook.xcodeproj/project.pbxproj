@@ -15,8 +15,6 @@
 		A10011 /* ShareSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10011 /* ShareSheet.swift */; };
 		A10012 /* Theme.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10012 /* Theme.swift */; };
 		A10013 /* CuisineDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10013 /* CuisineDetector.swift */; };
-		A10014 /* DishInputView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10014 /* DishInputView.swift */; };
-		A10015 /* SearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10015 /* SearchView.swift */; };
 		A10016 /* PopularDishes.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10016 /* PopularDishes.swift */; };
 		A10017 /* LaunchScreenView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10017 /* LaunchScreenView.swift */; };
 		A10018 /* RestaurantDishDB.swift in Sources */ = {isa = PBXBuildFile; fileRef = B10018 /* RestaurantDishDB.swift */; };
@@ -30,25 +28,22 @@
 		A20099002FA0000000000007 /* HomeTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA0000000000008 /* HomeTestView.swift */; };
 		A20099002FA0000000000009 /* SearchTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA000000000000A /* SearchTestView.swift */; };
 		A20099002FA000000000000B /* TableTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA000000000000C /* TableTestView.swift */; };
-		C0219F642F89F76900CAC08D /* HomeStateMachine.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F632F89F76900CAC08D /* HomeStateMachine.swift */; };
 		C0219F662F8A0C2800CAC08D /* MenuDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F652F8A0C2800CAC08D /* MenuDataService.swift */; };
-		C0219F682F8E088D00CAC08D /* AddPlaceFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F672F8E088D00CAC08D /* AddPlaceFlow.swift */; };
 		C0219F6A2F8F58DE00CAC08D /* OccasionClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */; };
+		C0219F6C2F9209BF00CAC08D /* InviteLandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6B2F9209BF00CAC08D /* InviteLandingView.swift */; };
+		C0219F712F92117E00CAC08D /* ManageTableView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6F2F92117E00CAC08D /* ManageTableView.swift */; };
+		C0219F722F92117E00CAC08D /* NotificationsSettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F702F92117E00CAC08D /* NotificationsSettingsView.swift */; };
+		C0219F732F92117E00CAC08D /* AccountMenuView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6D2F92117E00CAC08D /* AccountMenuView.swift */; };
+		C0219F742F92117E00CAC08D /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6E2F92117E00CAC08D /* EditProfileView.swift */; };
+		C0219F762F92120800CAC08D /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F752F92120800CAC08D /* FlowLayout.swift */; };
+		C0219F7A2F92EC7D00CAC08D /* MealWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F792F92EC7D00CAC08D /* MealWindow.swift */; };
 		C061DCB62F7A4AC400DF79BD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB52F7A4AC400DF79BD /* FirebaseAuth */; };
 		C061DCB82F7A4AC400DF79BD /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB72F7A4AC400DF79BD /* FirebaseCore */; };
 		C061DCBA2F7A4AC400DF79BD /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB92F7A4AC400DF79BD /* FirebaseFirestore */; };
 		C07B97842F7A4FD5009FA238 /* FirebaseConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07B97802F7A4FD5009FA238 /* FirebaseConfig.swift */; };
 		C07B97852F7A4FD5009FA238 /* AuthService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07B977F2F7A4FD5009FA238 /* AuthService.swift */; };
 		C07B97862F7A4FD5009FA238 /* SignInView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07B97832F7A4FD5009FA238 /* SignInView.swift */; };
-		C07B97872F7A4FD5009FA238 /* MyCircleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07B97822F7A4FD5009FA238 /* MyCircleView.swift */; };
 		C07B97882F7A4FD5009FA238 /* FirestoreService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C07B97812F7A4FD5009FA238 /* FirestoreService.swift */; };
-		C0A1CE8F2F7F908C0012F1EE /* NewCircleView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1CE8B2F7F908C0012F1EE /* NewCircleView.swift */; };
-		C0A1CE902F7F908C0012F1EE /* InviteOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1CE882F7F908C0012F1EE /* InviteOnboardingView.swift */; };
-		C0A1CE922F7F908C0012F1EE /* AddPlaceFlow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1CE872F7F908C0012F1EE /* AddPlaceFlow.swift */; };
-		C0A1CE982F823F770012F1EE /* RecommendationDetailSheet.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0A1CE972F823F770012F1EE /* RecommendationDetailSheet.swift */; };
-		C0C13E6E2F7CDC1E00A5DEFC /* SharedRestaurantDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E6D2F7CDC1E00A5DEFC /* SharedRestaurantDetailView.swift */; };
-		C0C13E6F2F7CDC1E00A5DEFC /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E6C2F7CDC1E00A5DEFC /* ProfileView.swift */; };
-		C0C13E732F7CED8300A5DEFC /* QuickLogView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E722F7CED8300A5DEFC /* QuickLogView.swift */; };
 		C0C13E752F7E461F00A5DEFC /* TasteOnboardingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E742F7E461F00A5DEFC /* TasteOnboardingView.swift */; };
 		C0C13E772F7E4D4E00A5DEFC /* FirebaseFunctions in Frameworks */ = {isa = PBXBuildFile; productRef = C0C13E762F7E4D4E00A5DEFC /* FirebaseFunctions */; };
 		C0C13E792F7EC84400A5DEFC /* AskForkBookService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */; };
@@ -73,8 +68,6 @@
 		B10011 /* ShareSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ShareSheet.swift; sourceTree = "<group>"; };
 		B10012 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		B10013 /* CuisineDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CuisineDetector.swift; sourceTree = "<group>"; };
-		B10014 /* DishInputView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DishInputView.swift; sourceTree = "<group>"; };
-		B10015 /* SearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchView.swift; sourceTree = "<group>"; };
 		B10016 /* PopularDishes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopularDishes.swift; sourceTree = "<group>"; };
 		B10017 /* LaunchScreenView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchScreenView.swift; sourceTree = "<group>"; };
 		B10018 /* RestaurantDishDB.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RestaurantDishDB.swift; sourceTree = "<group>"; };
@@ -84,25 +77,20 @@
 		B10024 /* ForkBook.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = ForkBook.entitlements; sourceTree = "<group>"; };
 		B10050 /* SharedModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedModels.swift; sourceTree = "<group>"; };
 		B10088 /* PickEventLogger.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PickEventLogger.swift; sourceTree = "<group>"; };
-		C0219F632F89F76900CAC08D /* HomeStateMachine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeStateMachine.swift; sourceTree = "<group>"; };
 		C0219F652F8A0C2800CAC08D /* MenuDataService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuDataService.swift; sourceTree = "<group>"; };
-		C0219F672F8E088D00CAC08D /* AddPlaceFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPlaceFlow.swift; sourceTree = "<group>"; };
 		C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = OccasionClassifier.swift; sourceTree = "<group>"; };
+		C0219F6B2F9209BF00CAC08D /* InviteLandingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteLandingView.swift; sourceTree = "<group>"; };
+		C0219F6D2F92117E00CAC08D /* AccountMenuView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountMenuView.swift; sourceTree = "<group>"; };
+		C0219F6E2F92117E00CAC08D /* EditProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EditProfileView.swift; sourceTree = "<group>"; };
+		C0219F6F2F92117E00CAC08D /* ManageTableView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ManageTableView.swift; sourceTree = "<group>"; };
+		C0219F702F92117E00CAC08D /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
+		C0219F752F92120800CAC08D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
+		C0219F792F92EC7D00CAC08D /* MealWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealWindow.swift; sourceTree = "<group>"; };
 		C07B977F2F7A4FD5009FA238 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		C07B97802F7A4FD5009FA238 /* FirebaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseConfig.swift; sourceTree = "<group>"; };
 		C07B97812F7A4FD5009FA238 /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
-		C07B97822F7A4FD5009FA238 /* MyCircleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MyCircleView.swift; sourceTree = "<group>"; };
 		C07B97832F7A4FD5009FA238 /* SignInView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SignInView.swift; sourceTree = "<group>"; };
-		C0A1CE872F7F908C0012F1EE /* AddPlaceFlow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AddPlaceFlow.swift; sourceTree = "<group>"; };
-		C0A1CE882F7F908C0012F1EE /* InviteOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InviteOnboardingView.swift; sourceTree = "<group>"; };
-		C0A1CE8B2F7F908C0012F1EE /* NewCircleView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NewCircleView.swift; sourceTree = "<group>"; };
-		C0A1CE972F823F770012F1EE /* RecommendationDetailSheet.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RecommendationDetailSheet.swift; sourceTree = "<group>"; };
-		C0C13E682F7CDB9100A5DEFC /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
-		C0C13E692F7CDB9100A5DEFC /* SharedRestaurantDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedRestaurantDetailView.swift; sourceTree = "<group>"; };
-		C0C13E6C2F7CDC1E00A5DEFC /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
-		C0C13E6D2F7CDC1E00A5DEFC /* SharedRestaurantDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SharedRestaurantDetailView.swift; sourceTree = "<group>"; };
 		C0C13E702F7CED7700A5DEFC /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
-		C0C13E722F7CED8300A5DEFC /* QuickLogView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuickLogView.swift; sourceTree = "<group>"; };
 		C0C13E742F7E461F00A5DEFC /* TasteOnboardingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TasteOnboardingView.swift; sourceTree = "<group>"; };
 		C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AskForkBookService.swift; sourceTree = "<group>"; };
 		C0C13E802F7EC84500A5DEFC /* LocalSearchIndex.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalSearchIndex.swift; sourceTree = "<group>"; };
@@ -147,18 +135,17 @@
 		E10002 /* ForkBook */ = {
 			isa = PBXGroup;
 			children = (
+				C0219F792F92EC7D00CAC08D /* MealWindow.swift */,
+				C0219F752F92120800CAC08D /* FlowLayout.swift */,
+				C0219F6D2F92117E00CAC08D /* AccountMenuView.swift */,
+				C0219F6E2F92117E00CAC08D /* EditProfileView.swift */,
+				C0219F6F2F92117E00CAC08D /* ManageTableView.swift */,
+				C0219F702F92117E00CAC08D /* NotificationsSettingsView.swift */,
+				C0219F6B2F9209BF00CAC08D /* InviteLandingView.swift */,
 				C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */,
-				C0219F672F8E088D00CAC08D /* AddPlaceFlow.swift */,
 				C0219F652F8A0C2800CAC08D /* MenuDataService.swift */,
-				C0219F632F89F76900CAC08D /* HomeStateMachine.swift */,
 				C0F0402F2F84BE7300958ED9 /* DebugClock.swift */,
 				C0F0402D2F84B3AF00958ED9 /* MockTableData.swift */,
-				C0A1CE972F823F770012F1EE /* RecommendationDetailSheet.swift */,
-				C0C13E682F7CDB9100A5DEFC /* ProfileView.swift */,
-				C0C13E692F7CDB9100A5DEFC /* SharedRestaurantDetailView.swift */,
-				C0A1CE872F7F908C0012F1EE /* AddPlaceFlow.swift */,
-				C0A1CE882F7F908C0012F1EE /* InviteOnboardingView.swift */,
-				C0A1CE8B2F7F908C0012F1EE /* NewCircleView.swift */,
 				A20099002FA0000000000004 /* MyPlacesTestView.swift */,
 				A20099002FA0000000000006 /* AddPlaceTestFlow.swift */,
 				A20099002FA0000000000008 /* HomeTestView.swift */,
@@ -169,14 +156,10 @@
 				D0AVATAR2F80000000000002 /* AvatarView.swift */,
 				D0LOCMGR2F80000000000002 /* LocationManager.swift */,
 				C0C13E742F7E461F00A5DEFC /* TasteOnboardingView.swift */,
-				C0C13E722F7CED8300A5DEFC /* QuickLogView.swift */,
 				C0C13E702F7CED7700A5DEFC /* Info.plist */,
-				C0C13E6C2F7CDC1E00A5DEFC /* ProfileView.swift */,
-				C0C13E6D2F7CDC1E00A5DEFC /* SharedRestaurantDetailView.swift */,
 				C07B977F2F7A4FD5009FA238 /* AuthService.swift */,
 				C07B97802F7A4FD5009FA238 /* FirebaseConfig.swift */,
 				C07B97812F7A4FD5009FA238 /* FirestoreService.swift */,
-				C07B97822F7A4FD5009FA238 /* MyCircleView.swift */,
 				C07B97832F7A4FD5009FA238 /* SignInView.swift */,
 				B10001 /* ForkBookApp.swift */,
 				B10002 /* ContentView.swift */,
@@ -184,13 +167,11 @@
 				B10050 /* SharedModels.swift */,
 				B10088 /* PickEventLogger.swift */,
 				B10013 /* CuisineDetector.swift */,
-				B10014 /* DishInputView.swift */,
 				B10003 /* Restaurant.swift */,
 				B10004 /* RestaurantStore.swift */,
 				B10005 /* RestaurantSearchService.swift */,
 				B10023 /* DeepLinkManager.swift */,
 				B10011 /* ShareSheet.swift */,
-				B10015 /* SearchView.swift */,
 				B10016 /* PopularDishes.swift */,
 				B10017 /* LaunchScreenView.swift */,
 				B10018 /* RestaurantDishDB.swift */,
@@ -285,20 +266,19 @@
 				A10001 /* ForkBookApp.swift in Sources */,
 				A10002 /* ContentView.swift in Sources */,
 				A10003 /* Restaurant.swift in Sources */,
+				C0219F762F92120800CAC08D /* FlowLayout.swift in Sources */,
 				A10004 /* RestaurantStore.swift in Sources */,
 				A10005 /* RestaurantSearchService.swift in Sources */,
+				C0219F712F92117E00CAC08D /* ManageTableView.swift in Sources */,
+				C0219F722F92117E00CAC08D /* NotificationsSettingsView.swift in Sources */,
+				C0219F732F92117E00CAC08D /* AccountMenuView.swift in Sources */,
+				C0219F742F92117E00CAC08D /* EditProfileView.swift in Sources */,
 				C0C13E752F7E461F00A5DEFC /* TasteOnboardingView.swift in Sources */,
-				C0A1CE8F2F7F908C0012F1EE /* NewCircleView.swift in Sources */,
-				C0A1CE902F7F908C0012F1EE /* InviteOnboardingView.swift in Sources */,
-				C0219F642F89F76900CAC08D /* HomeStateMachine.swift in Sources */,
-				C0A1CE922F7F908C0012F1EE /* AddPlaceFlow.swift in Sources */,
 				A20099002FA0000000000003 /* MyPlacesTestView.swift in Sources */,
 				A20099002FA0000000000005 /* AddPlaceTestFlow.swift in Sources */,
 				A20099002FA0000000000007 /* HomeTestView.swift in Sources */,
 				A20099002FA0000000000009 /* SearchTestView.swift in Sources */,
 				A20099002FA000000000000B /* TableTestView.swift in Sources */,
-				C0C13E6E2F7CDC1E00A5DEFC /* SharedRestaurantDetailView.swift in Sources */,
-				C0C13E6F2F7CDC1E00A5DEFC /* ProfileView.swift in Sources */,
 				A10023 /* DeepLinkManager.swift in Sources */,
 				A10011 /* ShareSheet.swift in Sources */,
 				A10012 /* Theme.swift in Sources */,
@@ -308,16 +288,12 @@
 				C07B97852F7A4FD5009FA238 /* AuthService.swift in Sources */,
 				C07B97862F7A4FD5009FA238 /* SignInView.swift in Sources */,
 				C0F0402E2F84B3AF00958ED9 /* MockTableData.swift in Sources */,
-				C0C13E732F7CED8300A5DEFC /* QuickLogView.swift in Sources */,
-				C07B97872F7A4FD5009FA238 /* MyCircleView.swift in Sources */,
 				C07B97882F7A4FD5009FA238 /* FirestoreService.swift in Sources */,
 				C0219F6A2F8F58DE00CAC08D /* OccasionClassifier.swift in Sources */,
 				A10013 /* CuisineDetector.swift in Sources */,
 				C0F040302F84BE7300958ED9 /* DebugClock.swift in Sources */,
-				C0219F682F8E088D00CAC08D /* AddPlaceFlow.swift in Sources */,
-				A10014 /* DishInputView.swift in Sources */,
-				A10015 /* SearchView.swift in Sources */,
 				C0219F662F8A0C2800CAC08D /* MenuDataService.swift in Sources */,
+				C0219F6C2F9209BF00CAC08D /* InviteLandingView.swift in Sources */,
 				D0AVATAR2F80000000000001 /* AvatarView.swift in Sources */,
 				D0LOCMGR2F80000000000001 /* LocationManager.swift in Sources */,
 				C0C13E792F7EC84400A5DEFC /* AskForkBookService.swift in Sources */,
@@ -325,7 +301,7 @@
 				A10016 /* PopularDishes.swift in Sources */,
 				A10017 /* LaunchScreenView.swift in Sources */,
 				A10018 /* RestaurantDishDB.swift in Sources */,
-				C0A1CE982F823F770012F1EE /* RecommendationDetailSheet.swift in Sources */,
+				C0219F7A2F92EC7D00CAC08D /* MealWindow.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -464,9 +440,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ForkBook/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ForkBook;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ForkBook uses your location to show nearby restaurants from your table.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -495,9 +471,9 @@
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = ForkBook/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = ForkBook;
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "ForkBook uses your location to show nearby restaurants from your table.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
-				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				LD_RUNPATH_SEARCH_PATHS = (
