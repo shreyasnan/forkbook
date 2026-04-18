@@ -499,12 +499,12 @@ struct HomeTestView: View {
     // =========================================================================
 
     private func heroCardView(_ hero: HeroCardData) -> some View {
-        let dishes = Array(
-            ([hero.heroDish] + hero.supportingDishes)
-                .filter { !$0.isEmpty }
-                .prefix(2)
-        )
         let showChanged = hero.changedConfidence.map { !isNewToYouPhrase($0) } ?? false
+        // Dish-as-H1 layout when we have a hero dish to promote. Falls
+        // back to restaurant-as-H1 for sparse data (solo picks, old
+        // entries with no dish logged) so we never show an empty H1.
+        let useDishAsH1 = !hero.heroDish.isEmpty
+        let supportingDish = hero.supportingDishes.first(where: { !$0.isEmpty })
 
         let cardContent = VStack(alignment: .leading, spacing: 0) {
             Text(hero.eyebrow)
@@ -513,36 +513,80 @@ struct HomeTestView: View {
                 .foregroundStyle(Self.mutedGray)
                 .padding(.bottom, 12)
 
-            // Name + distance + chevron (chevron = "tap for detail" affordance)
-            HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(hero.restaurant)
+            if useDishAsH1 {
+                // H1: the thing to order. Restaurant demotes to "where"
+                // below so the card reads as a decision ("Get the Calzone
+                // at Lucali") rather than a listing.
+                Text(hero.heroDish)
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(-0.6)
                     .foregroundStyle(Self.lightText)
-                Spacer(minLength: 8)
-                if let distance = hero.distanceText {
-                    Text(distance)
+                    .lineLimit(2)
+                    .padding(.bottom, 6)
+
+                // "at {Restaurant}" + distance + chevron
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text("at \(hero.restaurant)")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundStyle(Self.lightText)
+                        .lineLimit(1)
+                    Spacer(minLength: 8)
+                    if let distance = hero.distanceText {
+                        Text(distance)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Self.dimGray)
+                    }
+                    Image(systemName: "chevron.right")
                         .font(.system(size: 13, weight: .semibold))
                         .foregroundStyle(Self.dimGray)
                 }
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Self.dimGray)
-            }
-            .padding(.bottom, 4)
+                .padding(.bottom, 4)
 
-            if !hero.meta.isEmpty {
-                Text(hero.meta)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Self.dimGray)
-                    .padding(.bottom, 18)
-            }
+                if !hero.meta.isEmpty {
+                    Text(hero.meta)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Self.dimGray)
+                        .padding(.bottom, 14)
+                }
 
-            if !dishes.isEmpty {
-                Text(dishes.joined(separator: " \u{00B7} "))
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundStyle(Self.lightText)
-                    .padding(.bottom, 14)
+                if let supporting = supportingDish {
+                    Text("Also good: \(supporting)")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                        .padding(.bottom, 14)
+                }
+            } else {
+                // Fallback: restaurant-as-H1 when no hero dish.
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(hero.restaurant)
+                        .font(.system(size: 28, weight: .heavy))
+                        .tracking(-0.6)
+                        .foregroundStyle(Self.lightText)
+                    Spacer(minLength: 8)
+                    if let distance = hero.distanceText {
+                        Text(distance)
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundStyle(Self.dimGray)
+                    }
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundStyle(Self.dimGray)
+                }
+                .padding(.bottom, 4)
+
+                if !hero.meta.isEmpty {
+                    Text(hero.meta)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Self.dimGray)
+                        .padding(.bottom, 18)
+                }
+
+                if let supporting = supportingDish {
+                    Text(supporting)
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundStyle(Self.lightText)
+                        .padding(.bottom, 14)
+                }
             }
 
             Text(hero.trustLine)
