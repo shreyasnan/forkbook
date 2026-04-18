@@ -584,10 +584,10 @@ struct HomeTestView: View {
     }
 
     /// Composed dish line for the hero card: bold white joined dishes
-    /// followed by a muted "— skip the X" clause when the table has an
-    /// agreed-upon dislike. Returns a single `Text` so SwiftUI wraps
-    /// both segments as one paragraph (with `.lineLimit(2)` applied by
-    /// the caller). Dish names keep their original casing.
+    /// followed by a muted "— didn't like the X" clause when the table
+    /// has an agreed-upon dislike. Returns a single `Text` so SwiftUI
+    /// wraps both segments as one paragraph (with `.lineLimit(2)` applied
+    /// by the caller). Dish names keep their original casing.
     private func heroDishesText(joined: String, skipped: [String]) -> Text {
         let base = Text(joined)
             .font(.system(size: 18, weight: .semibold))
@@ -598,9 +598,9 @@ struct HomeTestView: View {
 
         let clause: String
         if cleaned.count == 1 {
-            clause = " \u{2014} skip the \(cleaned[0])"
+            clause = " \u{2014} didn\u{2019}t like the \(cleaned[0])"
         } else {
-            clause = " \u{2014} skip the \(cleaned[0]) or \(cleaned[1])"
+            clause = " \u{2014} didn\u{2019}t like the \(cleaned[0]) or \(cleaned[1])"
         }
 
         let tail = Text(clause)
@@ -610,16 +610,16 @@ struct HomeTestView: View {
         return base + tail
     }
 
-    /// Standalone skip line for the detail sheet. Sentence-cased because
-    /// it's its own row (not an inline clause). Returns nil when there's
-    /// nothing to show so the caller can skip the whole row.
+    /// Standalone "didn't like" line for the detail sheet. Sentence-cased
+    /// because it's its own row (not an inline clause). Returns nil when
+    /// there's nothing to show so the caller can skip the whole row.
     private func aggregateSkipLine(_ skipped: [String]) -> String? {
         let cleaned = skipped.filter { !$0.isEmpty }
         guard !cleaned.isEmpty else { return nil }
         if cleaned.count == 1 {
-            return "Skip the \(cleaned[0])"
+            return "Didn\u{2019}t like the \(cleaned[0])"
         }
-        return "Skip the \(cleaned[0]) or \(cleaned[1])"
+        return "Didn\u{2019}t like the \(cleaned[0]) or \(cleaned[1])"
     }
 
     // =========================================================================
@@ -955,15 +955,15 @@ struct HomeTestView: View {
                             .foregroundStyle(Self.warmAccent.opacity(0.85))
                     }
 
-                    // Mirror the "Liked:" format for skips so the receipts
-                    // read symmetrically. Muted so the liked line still
-                    // leads the eye — skips are context, not the headline.
+                    // Mirror the "Liked:" format so the receipts read
+                    // symmetrically. Muted so the liked line still leads
+                    // the eye — dislikes are context, not the headline.
                     if !friend.skippedDishes.isEmpty {
                         let skipText = friend.skippedDishes.count <= 2
                             ? friend.skippedDishes.joined(separator: ", ")
                             : friend.skippedDishes.prefix(2).joined(separator: ", ")
                                 + " +\(friend.skippedDishes.count - 2) more"
-                        Text("Skipped: \(skipText)")
+                        Text("Didn\u{2019}t like: \(skipText)")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundStyle(Self.mutedGray)
                     }
