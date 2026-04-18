@@ -1417,25 +1417,17 @@ struct HomeTestView: View {
         }()
         let meta = metaParts.joined(separator: " \u{00B7} ")
 
-        let recent = (c.freshestDaysAgo ?? Int.max) <= 7
         let dish = c.topDish ?? ""
 
+        // Single decision-first eyebrow. Voice matches the "Get the X"
+        // headline: this IS the pick, here's when. The contextual why
+        // (repeat visitor, personal favorite, fresh log, etc.) moves
+        // entirely to the trust line below — one signal per slot.
         let eyebrow: String = {
-            // When an occasion chip is active and we have any table signal,
-            // lean on the simple "FROM YOUR TABLE" framing from the mock.
-            if selectedOccasion != nil && c.memberNames.count >= 1 {
-                return "FROM YOUR TABLE"
+            if let tag = selectedOccasion {
+                return "THE PICK \u{00B7} \(tag.sectionUppercase)"
             }
-            if c.memberNames.count >= 3 {
-                return "YOUR TABLE\u{2019}S PICK FOR \(MealWindow.current.eyebrowFragment)"
-            }
-            if c.isRepeat && c.memberNames.count >= 1 {
-                return "YOUR TABLE KEEPS ORDERING THIS"
-            }
-            if c.userIsGoTo { return "YOU ALWAYS GO BACK" }
-            if c.userLoved && c.memberNames.isEmpty { return "YOU LOVED THIS PLACE" }
-            if recent { return "FRESH FROM YOUR TABLE" }
-            return "STRONG PICK"
+            return "THE PICK \u{00B7} \(MealWindow.current.eyebrowFragment)"
         }()
 
         let trustLine = buildTrustLine(
