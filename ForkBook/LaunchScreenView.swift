@@ -2,8 +2,9 @@ import SwiftUI
 
 // MARK: - Launch Screen View
 //
-// The SwiftUI splash shown on top of the iOS launch image for ~600ms on
+// The SwiftUI splash shown on top of the iOS launch image for ~2.2s on
 // cold start, and again while AuthService is resolving signed-in state.
+// Hold duration is set in ForkBookApp.swift's .onAppear.
 //
 // Design intent: wordmark-only, no icon. The real iOS launch image
 // carries the app icon moment; this layer is the brand "handshake" —

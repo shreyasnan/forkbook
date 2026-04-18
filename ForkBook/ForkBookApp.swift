@@ -38,7 +38,11 @@ struct ForkBookApp: App {
                 }
             }
             .onAppear {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.4) {
+                // Splash holds for 2.2s before starting a 0.4s fade-out.
+                // After the 0.55s wordmark fade-in, that leaves ~1.65s
+                // of fully-visible time — enough to read the wordmark
+                // and "WHERE YOUR TABLE EATS" tagline on first launch.
+                DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) {
                     withAnimation(.easeOut(duration: 0.4)) {
                         showLaunch = false
                     }
