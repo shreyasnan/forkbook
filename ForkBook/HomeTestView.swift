@@ -504,6 +504,11 @@ struct HomeTestView: View {
         // row below shows up to 3 dishes joined with middle-dots so the
         // card still tells you what to order, just without hijacking the
         // headline slot.
+        //
+        // Color scheme: the H1 gets gold, trust line drops to muted
+        // off-white — carried over from the dish-led iteration so the
+        // card still reads "the featured thing is gold, support is
+        // white." Here the featured thing is the restaurant.
         let joinedDishes = Array(
             ([hero.heroDish] + hero.supportingDishes)
                 .filter { !$0.isEmpty }
@@ -521,7 +526,7 @@ struct HomeTestView: View {
                 Text(hero.restaurant)
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(-0.6)
-                    .foregroundStyle(Self.lightText)
+                    .foregroundStyle(Self.warmAccent)
                 Spacer(minLength: 8)
                 if let distance = hero.distanceText {
                     Text(distance)
@@ -551,7 +556,7 @@ struct HomeTestView: View {
 
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Self.warmAccent)
+                .foregroundStyle(Color(hex: "B0B0B4"))
 
             if showChanged, let changed = hero.changedConfidence {
                 HStack(spacing: 6) {
@@ -560,7 +565,7 @@ struct HomeTestView: View {
                         .frame(width: 6, height: 6)
                     Text(changed)
                         .font(.system(size: 12, weight: .medium))
-                        .foregroundStyle(Self.mutedGray)
+                        .foregroundStyle(Color(hex: "B0B0B4"))
                 }
                 .padding(.top, 10)
             }
