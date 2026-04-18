@@ -15,6 +15,10 @@ struct MyPlacesTestView: View {
     @ObservedObject private var askService = AskForkBookService.shared
     @ObservedObject private var firestoreService = FirestoreService.shared
 
+    // Optional binding so the empty-state CTA can route the user to the
+    // Search tab. Optional keeps previews/previews-only callers working.
+    var selectedTab: Binding<Int>? = nil
+
     @State private var route: Route = .home
     @State private var query: String = ""
     @FocusState private var searchFocused: Bool
@@ -66,6 +70,11 @@ struct MyPlacesTestView: View {
             }
         }
         .task { await loadTableData() }
+        // Refetch when circle membership changes (e.g. deep-link invite
+        // auto-accepted after this view was already mounted).
+        .onChange(of: firestoreService.circlesVersion) { _, _ in
+            Task { await loadTableData() }
+        }
         .sheet(item: $selectedTableHit) { hit in
             tableHitSheet(hit)
         }
@@ -78,9 +87,12 @@ struct MyPlacesTestView: View {
     private func loadTableData() async {
         let circles = await firestoreService.getMyCircles()
         guard let circle = circles.first else {
-            // No circle yet — seed with mock data so search has table signal.
+            // No circle yet — in DEBUG seed mock data so search has table signal.
+            // In Release (TestFlight/App Store) leave empty so real users start clean.
+            #if DEBUG
             tableMembers = MockTableData.buildMembers()
             tableRestaurants = MockTableData.buildSharedRestaurants()
+            #endif
             return
         }
 
@@ -93,11 +105,14 @@ struct MyPlacesTestView: View {
         }
 
         // Mock data fallback when the user's circle has no friend entries.
+        // In Release leave empty so real users start clean.
+        #if DEBUG
         let realEntries = fetched.filter { $0.userId != currentUid }
         if realEntries.isEmpty {
             tableMembers = tableMembers + MockTableData.buildMembers()
             fetched.append(contentsOf: MockTableData.buildSharedRestaurants())
         }
+        #endif
 
         tableRestaurants = fetched
     }
@@ -189,14 +204,33 @@ struct MyPlacesTestView: View {
 
     // Empty state when no visited restaurants
     private var emptyState: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("Nothing logged yet")
                 .font(.system(size: 16, weight: .bold))
                 .foregroundStyle(Color.fbText)
-            Text("Add places you\u{2019}ve been.")
+            Text("Log the places you already love so your table gets smarter.")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundStyle(Color(hex: "B0B0B4").opacity(0.92))
                 .fixedSize(horizontal: false, vertical: true)
+
+            Button {
+                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                // Route to Search tab (tag 1) if the binding is wired.
+                selectedTab?.wrappedValue = 1
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                    Text("Add your first place")
+                        .font(.system(size: 14, weight: .bold))
+                }
+                .foregroundStyle(Color.fbText)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 10)
+                .background(Capsule().fill(Color.fbWarm.opacity(0.18)))
+                .overlay(Capsule().stroke(Color.fbWarm.opacity(0.35), lineWidth: 1))
+            }
+            .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)

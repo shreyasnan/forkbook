@@ -298,6 +298,11 @@ struct SearchTestView: View {
                     .id(logPrefillName)   // force a fresh view so prefill onAppear fires
             }
             .task { await loadTableData() }
+            // Refetch when circle membership changes (e.g. deep-link invite
+            // auto-accepted after this view was already mounted).
+            .onChange(of: firestoreService.circlesVersion) { _, _ in
+                Task { await loadTableData() }
+            }
             .onChange(of: searchText) { newValue in
                 searchService.searchText = newValue
             }
@@ -1103,11 +1108,14 @@ struct SearchTestView: View {
             }
         }
 
+        // In Release (TestFlight/App Store) leave empty so real users start clean.
+        #if DEBUG
         let realEntries = tableRestaurants.filter { $0.userId != currentUid }
         if realEntries.isEmpty {
             tableMembers = tableMembers + MockTableData.buildMembers()
             tableRestaurants.append(contentsOf: MockTableData.buildSharedRestaurants())
         }
+        #endif
 
         isLoadingTable = false
     }

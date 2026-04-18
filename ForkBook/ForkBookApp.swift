@@ -74,10 +74,11 @@ struct ForkBookApp: App {
         case .joinCircle(let code):
             Task {
                 do {
-                    if let request = try await FirestoreService.shared.requestToJoinTable(inviteCode: code) {
-                        showToast("Request sent to join \(request.circleName)!")
+                    let result = try await FirestoreService.shared.acceptInvite(inviteCode: code)
+                    if result.alreadyMember {
+                        showToast("You're already at \(result.circle.name).")
                     } else {
-                        showToast("Table not found. Check the invite link.")
+                        showToast("Joined \(result.circle.name)!")
                     }
                 } catch {
                     showToast("Couldn't join table: \(error.localizedDescription)")

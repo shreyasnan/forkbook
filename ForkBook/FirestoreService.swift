@@ -10,6 +10,12 @@ class FirestoreService: ObservableObject {
 
     private var db: Firestore { FirebaseConfig.shared.db }
 
+    /// Bumped whenever the current user's circle membership changes
+    /// (invite auto-accept, manual join, default-circle creation). Views that
+    /// depend on circle data observe this and refetch on change — otherwise
+    /// they'd stay stuck on whatever they cached on first `.task`.
+    @Published var circlesVersion: Int = 0
+
     private init() {}
 
     // MARK: - User Profile
@@ -84,6 +90,9 @@ class FirestoreService: ObservableObject {
                 )
                 // Add circle ID to user profile
                 try await ref.updateData(["circleIds": FieldValue.arrayUnion([circle.id])])
+                // Signal to observers (Home/Table tabs) that circle membership
+                // just changed so they refetch.
+                circlesVersion &+= 1
             }
         } catch {
             print("Error creating user profile: \(error)")
@@ -420,6 +429,97 @@ class FirestoreService: ObservableObject {
         try await db.collection("tableRequests").document(request.id).updateData([
             "status": "declined"
         ])
+    }
+
+    // MARK: - Invite Auto-Accept (no approval step)
+    //
+    // Used by the deep-link handler: when B taps an invite link from A,
+    // B is immediately added to A's circle *and* A is immediately added to
+    // B's circle. No owner approval required.
+    //
+    // Security note: Firestore rules allow any authenticated user to update
+    // a circle as long as they end up in memberIds, and B owns B's own circle
+    // so the reverse add is always allowed. Adding the circle to A's
+    // user.circleIds is blocked by rules (only A can write A's user doc),
+    // but that's fine — getMyCircles() discovers circles by memberIds, not
+    // by user.circleIds.
+
+    /// Result of accepting an invite link.
+    struct InviteAcceptResult {
+        let circle: Circle          // the circle B joined (A's circle)
+        let alreadyMember: Bool     // true if B was already in it
+    }
+
+    /// Accept an invite code and perform a mutual join.
+    /// Ensures the current user has a circle (creating one if needed) so the
+    /// inviter can be reciprocally added.
+    func acceptInvite(inviteCode: String) async throws -> InviteAcceptResult {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let user = Auth.auth().currentUser else {
+            throw CircleError.invalidCode
+        }
+
+        // Make sure the accepter has a user profile + their own default circle.
+        // createUserProfileIfNeeded is idempotent (checks !doc.exists), so this
+        // is safe even if the profile already exists.
+        await createUserProfileIfNeeded(for: user)
+
+        // 1. Look up the inviter's circle by code.
+        let snapshot = try await db.collection("circles")
+            .whereField("inviteCode", isEqualTo: inviteCode.uppercased())
+            .limit(to: 1)
+            .getDocuments()
+
+        guard let doc = snapshot.documents.first else {
+            throw CircleError.invalidCode
+        }
+        var inviterCircle = try doc.data(as: Circle.self)
+
+        // Already a member? Still do the reciprocal add in case we got here
+        // on a stale state, but otherwise this is a no-op.
+        let alreadyMember = inviterCircle.memberIds.contains(uid)
+
+        // 2. Add B to A's circle.
+        if !alreadyMember {
+            try await doc.reference.updateData([
+                "memberIds": FieldValue.arrayUnion([uid]),
+                "updatedAt": Date()
+            ])
+            inviterCircle.memberIds.append(uid)
+
+            // 3. Add A's circle to B's user.circleIds (own doc, allowed).
+            try await db.collection("users").document(uid).updateData([
+                "circleIds": FieldValue.arrayUnion([inviterCircle.id])
+            ])
+        }
+
+        // 4. Reciprocal add: add A (inviterCircle.ownerId) to B's circle.
+        // B owns their own circle and can update it freely.
+        let ownerUid = inviterCircle.ownerId
+        if ownerUid != uid {
+            let mine = try await db.collection("circles")
+                .whereField("ownerId", isEqualTo: uid)
+                .limit(to: 1)
+                .getDocuments()
+            if let myDoc = mine.documents.first {
+                let myCircle = try myDoc.data(as: Circle.self)
+                if !myCircle.memberIds.contains(ownerUid) {
+                    try await myDoc.reference.updateData([
+                        "memberIds": FieldValue.arrayUnion([ownerUid]),
+                        "updatedAt": Date()
+                    ])
+                }
+            }
+            // (We intentionally do NOT write to A's user.circleIds — Firestore
+            // rules block that, and circle discovery uses memberIds anyway.)
+        }
+
+        // Signal to observers (Home/Table tabs) that circle membership just
+        // changed so they refetch and the tester immediately sees the inviter's
+        // table populate, instead of having to kill and reopen the app.
+        circlesVersion &+= 1
+
+        return InviteAcceptResult(circle: inviterCircle, alreadyMember: alreadyMember)
     }
 
     // MARK: - Restaurant Sync

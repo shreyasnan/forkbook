@@ -41,7 +41,7 @@ struct HomeTestView: View {
     // resurface on next launch.
     @State private var dismissedNames: Set<String> = []
     private static let dismissedKey = "ForkBook_DismissedHeroNames"
-    private let firestoreService = FirestoreService.shared
+    @ObservedObject private var firestoreService = FirestoreService.shared
 
     // -- Design tokens --
     private static let cardBg = Color(hex: "131517")
@@ -176,6 +176,11 @@ struct HomeTestView: View {
             loadDismissed()
             locationManager.requestLocation()
             await loadTableData()
+        }
+        // Refetch when circle membership changes (e.g. deep-link invite
+        // auto-accepted after this view was already mounted).
+        .onChange(of: firestoreService.circlesVersion) { _, _ in
+            Task { await loadTableData() }
         }
     }
 
@@ -992,10 +997,13 @@ struct HomeTestView: View {
     private func loadTableData() async {
         let circles = await firestoreService.getMyCircles()
         guard let circle = circles.first else {
-            // No circle yet — seed with mock data so the hero has table signal.
+            // No circle yet — in DEBUG seed mock data so the hero has table signal.
+            // In Release (TestFlight/App Store) leave empty so real users start clean.
+            #if DEBUG
             self.tableMembers = MockTableData.buildMembers()
             self.tableRestaurants = MockTableData.buildSharedRestaurants()
             self.usingMockData = true
+            #endif
             return
         }
 
@@ -1015,6 +1023,8 @@ struct HomeTestView: View {
         }
 
         // Mock data fallback when the user's circle has no friend entries.
+        // In Release (TestFlight/App Store) leave empty so real users start clean.
+        #if DEBUG
         let realFriends = restaurants.filter { $0.userId != currentUid }
         if realFriends.isEmpty {
             self.tableMembers = members + MockTableData.buildMembers()
@@ -1025,6 +1035,11 @@ struct HomeTestView: View {
             self.tableRestaurants = restaurants
             self.usingMockData = false
         }
+        #else
+        self.tableMembers = members
+        self.tableRestaurants = restaurants
+        self.usingMockData = false
+        #endif
     }
 
     // =========================================================================

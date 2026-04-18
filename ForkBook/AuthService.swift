@@ -90,21 +90,6 @@ class AuthService: ObservableObject {
         }
     }
 
-    // MARK: - Anonymous Sign-In (for testing without Apple Developer account)
-
-    func signInAnonymously() async {
-        do {
-            let result = try await Auth.auth().signInAnonymously()
-            let changeRequest = result.user.createProfileChangeRequest()
-            changeRequest.displayName = "Shreyas"
-            try? await changeRequest.commitChanges()
-            await FirestoreService.shared.createUserProfileIfNeeded(for: result.user)
-            errorMessage = nil
-        } catch {
-            errorMessage = "Sign-in failed: \(error.localizedDescription)"
-        }
-    }
-
     // MARK: - Sign Out
 
     func signOut() {

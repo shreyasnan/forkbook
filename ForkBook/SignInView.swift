@@ -55,16 +55,6 @@ struct SignInView: View {
                     .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                     .padding(.horizontal, 40)
 
-                    // Dev mode: anonymous sign-in
-                    Button {
-                        Task { await authService.signInAnonymously() }
-                    } label: {
-                        Text("Continue as Guest")
-                    }
-                    .buttonStyle(FBSecondaryButtonStyle())
-                    .padding(.horizontal, 40)
-                    .padding(.top, 4)
-
                     if let error = authService.errorMessage {
                         Text(error)
                             .font(.caption)

@@ -49,7 +49,7 @@ struct ContentView: View {
                 }
                 .tag(1)
 
-            MyPlacesTestView()
+            MyPlacesTestView(selectedTab: $selectedTab)
                 .tabItem {
                     Label("My Places", systemImage: "bookmark")
                 }

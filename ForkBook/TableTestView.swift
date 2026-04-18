@@ -15,7 +15,7 @@ struct TableTestView: View {
     @State private var hasLoaded = false
     @State private var tableMembers: [FirestoreService.CircleMember] = []
     @State private var tableRestaurants: [SharedRestaurant] = []
-    private let firestoreService = FirestoreService.shared
+    @ObservedObject private var firestoreService = FirestoreService.shared
 
     private var currentUid: String? { Auth.auth().currentUser?.uid }
 
@@ -68,6 +68,11 @@ struct TableTestView: View {
             guard !hasLoaded else { return }
             hasLoaded = true
             await loadTable()
+        }
+        // Refetch when circle membership changes (e.g. deep-link invite
+        // auto-accepted after this view was already mounted).
+        .onChange(of: firestoreService.circlesVersion) { _, _ in
+            Task { await loadTable() }
         }
     }
 
@@ -198,9 +203,12 @@ struct TableTestView: View {
     private func loadTable() async {
         let circles = await firestoreService.getMyCircles()
         guard let circle = circles.first else {
-            // No circle yet — seed with mock data so the tab isn't empty.
+            // No circle yet — in DEBUG seed mock data so the tab has signal.
+            // In Release (TestFlight/App Store) leave empty so real users start clean.
+            #if DEBUG
             self.tableMembers = MockTableData.buildMembers()
             self.tableRestaurants = MockTableData.buildSharedRestaurants()
+            #endif
             return
         }
         let members = await firestoreService.getCircleMembers(circle: circle)
@@ -211,6 +219,8 @@ struct TableTestView: View {
         }
 
         // Mock data fallback when the user's circle is empty.
+        // In Release leave empty so real users start clean.
+        #if DEBUG
         let realFriends = restaurants.filter { $0.userId != currentUid }
         if realFriends.isEmpty {
             self.tableMembers = members + MockTableData.buildMembers()
@@ -219,6 +229,10 @@ struct TableTestView: View {
             self.tableMembers = members
             self.tableRestaurants = restaurants
         }
+        #else
+        self.tableMembers = members
+        self.tableRestaurants = restaurants
+        #endif
     }
 
     // =========================================================================
