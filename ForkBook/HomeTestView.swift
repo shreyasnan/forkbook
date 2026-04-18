@@ -522,7 +522,7 @@ struct HomeTestView: View {
                 Text("Get the \(hero.heroDish)")
                     .font(.system(size: 28, weight: .heavy))
                     .tracking(-0.6)
-                    .foregroundStyle(Self.lightText)
+                    .foregroundStyle(Self.warmAccent)
                     .lineLimit(2)
                     .padding(.bottom, 6)
 
@@ -591,9 +591,12 @@ struct HomeTestView: View {
                 }
             }
 
+            // Trust line stays in the warm-gold family but at lower
+            // opacity so the dish headline owns the full-strength gold.
+            // Same relationship applied on backup cards below.
             Text(hero.trustLine)
                 .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(Self.warmAccent)
+                .foregroundStyle(Self.warmAccent.opacity(0.7))
 
             if showChanged, let changed = hero.changedConfidence {
                 HStack(spacing: 6) {
@@ -635,11 +638,13 @@ struct HomeTestView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             if useDishAsH1 {
-                // Dish + distance + chevron — the headline.
+                // Dish + distance + chevron — the headline. Gold to mirror
+                // the hero card; the whole feed reads "gold = the dish to
+                // order, white = everything else."
                 HStack(alignment: .firstTextBaseline, spacing: 10) {
                     Text(backup.heroDish)
                         .font(.system(size: 17, weight: .bold))
-                        .foregroundStyle(Color.fbText)
+                        .foregroundStyle(Self.warmAccent)
                         .lineLimit(2)
                     Spacer(minLength: 8)
                     if let distance = backup.distanceText {
@@ -695,9 +700,10 @@ struct HomeTestView: View {
             // Prefer a specific name-led reason ("Puneet's been 3×") when
             // friend-summary data supports one — gives the tail variety
             // vs every card reading "Picked by X from your table".
+            // Softened gold so the dish headline stays the loud one.
             Text(backup.namedReason ?? backup.trustLine)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Self.warmAccent)
+                .foregroundStyle(Self.warmAccent.opacity(0.7))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
