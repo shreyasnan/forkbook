@@ -638,9 +638,13 @@ struct HomeTestView: View {
 
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
+                // Gold H1 — matches the hero card so the two card types
+                // read as one family. Name > dishes > trust, same visual
+                // hierarchy whether you're looking at the pick or the
+                // runners-up.
                 Text(backup.restaurant)
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.fbText)
+                    .foregroundStyle(Self.warmAccent)
                 Spacer(minLength: 8)
                 if let distance = backup.distanceText {
                     Text(distance)
@@ -663,17 +667,18 @@ struct HomeTestView: View {
             if !joinedDishes.isEmpty {
                 Text(joinedDishes)
                     .font(.system(size: 13, weight: .semibold))
-                    .foregroundStyle(Color.fbText.opacity(0.85))
+                    .foregroundStyle(Self.lightText)
                     .lineLimit(1)
                     .padding(.bottom, 6)
             }
 
-            // Prefer a specific name-led reason ("Puneet's been 3×") when
-            // friend-summary data supports one — gives the tail variety
-            // vs every card reading "Picked by X from your table".
+            // Muted-white trust line — matches the hero card's secondary
+            // text. Prefer a specific name-led reason ("Puneet's been 3×")
+            // when friend-summary data supports one so the tail doesn't
+            // read "Picked by X from your table" on every card.
             Text(backup.namedReason ?? backup.trustLine)
                 .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(Self.warmAccent)
+                .foregroundStyle(Color(hex: "B0B0B4"))
                 .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
