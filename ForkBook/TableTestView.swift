@@ -15,6 +15,10 @@ struct TableTestView: View {
     @State private var hasLoaded = false
     @State private var tableMembers: [FirestoreService.CircleMember] = []
     @State private var tableRestaurants: [SharedRestaurant] = []
+    /// Set when the user taps a friend row in "Your people" — presents the
+    /// FriendProfileView sheet. CircleMember is Identifiable by uid, so
+    /// this plays nicely with `.sheet(item:)`.
+    @State private var selectedFriend: FirestoreService.CircleMember? = nil
     @ObservedObject private var firestoreService = FirestoreService.shared
 
     private var currentUid: String? { Auth.auth().currentUser?.uid }
@@ -63,6 +67,12 @@ struct TableTestView: View {
         }
         .sheet(isPresented: $showInviteSheet) {
             InvitePlaceholderSheet()
+        }
+        .sheet(item: $selectedFriend) { member in
+            FriendProfileView(
+                member: member,
+                entries: tableRestaurants.filter { $0.userId == member.uid }
+            )
         }
         .task {
             guard !hasLoaded else { return }
@@ -150,7 +160,9 @@ struct TableTestView: View {
 
             VStack(spacing: 10) {
                 ForEach(Array(people.enumerated()), id: \.offset) { _, person in
-                    CompactPersonRow(person: person)
+                    CompactPersonRow(person: person) {
+                        selectedFriend = tableMembers.first(where: { $0.uid == person.uid })
+                    }
                 }
             }
         }
@@ -326,6 +338,7 @@ struct TableTestView: View {
             let hint = hintText(member: member, entries: theirEntries)
 
             return TablePerson(
+                uid: member.uid,
                 initial: initial,
                 name: name,
                 descriptor: descriptor,
@@ -390,6 +403,7 @@ struct TableTestView: View {
 // MARK: - Models
 
 private struct TablePerson {
+    let uid: String
     let initial: String
     let name: String
     let descriptor: String
@@ -437,10 +451,12 @@ private struct TrustShortcutRow: View {
 
 private struct CompactPersonRow: View {
     let person: TablePerson
+    let onTap: () -> Void
 
     var body: some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            onTap()
         } label: {
             HStack(alignment: .top, spacing: 14) {
                 avatar

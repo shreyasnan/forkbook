@@ -28,6 +28,7 @@
 		A20099002FA0000000000007 /* HomeTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA0000000000008 /* HomeTestView.swift */; };
 		A20099002FA0000000000009 /* SearchTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA000000000000A /* SearchTestView.swift */; };
 		A20099002FA000000000000B /* TableTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA000000000000C /* TableTestView.swift */; };
+		F12D9A1B0001000000000001 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12D9A1B0001000000000002 /* FriendProfileView.swift */; };
 		C0219F662F8A0C2800CAC08D /* MenuDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F652F8A0C2800CAC08D /* MenuDataService.swift */; };
 		C0219F6A2F8F58DE00CAC08D /* OccasionClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */; };
 		C0219F6C2F9209BF00CAC08D /* InviteLandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6B2F9209BF00CAC08D /* InviteLandingView.swift */; };
@@ -60,6 +61,7 @@
 		A20099002FA0000000000008 /* HomeTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeTestView.swift; sourceTree = "<group>"; };
 		A20099002FA000000000000A /* SearchTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTestView.swift; sourceTree = "<group>"; };
 		A20099002FA000000000000C /* TableTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableTestView.swift; sourceTree = "<group>"; };
+		F12D9A1B0001000000000002 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
 		B10001 /* ForkBookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForkBookApp.swift; sourceTree = "<group>"; };
 		B10002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B10003 /* Restaurant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Restaurant.swift; sourceTree = "<group>"; };
@@ -151,6 +153,7 @@
 				A20099002FA0000000000008 /* HomeTestView.swift */,
 				A20099002FA000000000000A /* SearchTestView.swift */,
 				A20099002FA000000000000C /* TableTestView.swift */,
+				F12D9A1B0001000000000002 /* FriendProfileView.swift */,
 				C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */,
 				C0C13E802F7EC84500A5DEFC /* LocalSearchIndex.swift */,
 				D0AVATAR2F80000000000002 /* AvatarView.swift */,
@@ -279,6 +282,7 @@
 				A20099002FA0000000000007 /* HomeTestView.swift in Sources */,
 				A20099002FA0000000000009 /* SearchTestView.swift in Sources */,
 				A20099002FA000000000000B /* TableTestView.swift in Sources */,
+				F12D9A1B0001000000000001 /* FriendProfileView.swift in Sources */,
 				A10023 /* DeepLinkManager.swift in Sources */,
 				A10011 /* ShareSheet.swift in Sources */,
 				A10012 /* Theme.swift in Sources */,
