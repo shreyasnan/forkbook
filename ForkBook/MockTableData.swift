@@ -31,9 +31,18 @@ enum MockTableData {
     ]
 
     // MARK: - Public API
+    //
+    // KILL SWITCH: when testing with real friends, mocks pollute the
+    // UI with fake-Pragya data even after a real circle exists.
+    // Setting this to `false` returns empty from both builders so
+    // every call site stays valid but produces nothing. Flip back to
+    // `true` only for solo dev / first-run UX testing where you want
+    // signal diversity without onboarding a real circle.
+    static let mockEnabled = false
 
     /// Build mock SharedRestaurant entries with relative dates anchored to now.
     static func buildSharedRestaurants() -> [SharedRestaurant] {
+        guard mockEnabled else { return [] }
         let now = DebugClock.now
         func daysAgo(_ n: Int) -> Date { Calendar.current.date(byAdding: .day, value: -n, to: now) ?? now }
 
@@ -302,6 +311,7 @@ enum MockTableData {
 
     /// Build mock CircleMember objects so friend-name lookups work in NewHomeView.
     static func buildMembers() -> [FirestoreService.CircleMember] {
-        friends.map { FirestoreService.CircleMember(uid: $0.uid, displayName: $0.displayName) }
+        guard mockEnabled else { return [] }
+        return friends.map { FirestoreService.CircleMember(uid: $0.uid, displayName: $0.displayName) }
     }
 }

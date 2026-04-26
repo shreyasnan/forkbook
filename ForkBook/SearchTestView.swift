@@ -26,17 +26,43 @@ struct SearchTestView: View {
     @State private var tableMembers: [FirestoreService.CircleMember] = []
     @State private var isLoadingTable = true
 
-    @State private var selectedDetail: SearchDetailData? = nil
+    /// Prefill payload carried inside the addPlace case so it's
+    /// bundled atomically with the sheet presentation. Previous
+    /// design stored prefill in separate @State vars which created
+    /// a window where the sheet's content closure could read stale
+    /// or empty values during the detail → addPlace handoff,
+    /// causing AddPlaceTestFlow's `onAppear` to see no prefill and
+    /// dismiss itself (the "tap twice" bug).
+    struct AddPlacePrefill: Hashable {
+        let name: String
+        let address: String
+        let cuisine: CuisineType?
+    }
+
+    /// Single-sheet routing. Using one `.sheet(item:)` driven by an enum
+    /// instead of two separate `.sheet` modifiers avoids SwiftUI's
+    /// "second sheet silently dropped" bug.
+    enum SearchSheet: Identifiable {
+        case detail(SearchDetailData)
+        case addPlace(AddPlacePrefill)
+        var id: String {
+            switch self {
+            case .detail(let d): return "detail-\(d.name)"
+            case .addPlace(let p): return "addPlace-\(p.name)"
+            }
+        }
+    }
+    @State private var activeSheet: SearchSheet? = nil
+
+    /// If set when `activeSheet` becomes nil, the sheet's onDismiss
+    /// re-presents with this value instead of treating the dismissal
+    /// as final. Used by "I went here" to swap detail → addPlace
+    /// via onDismiss chaining, which is more reliable than
+    /// reassigning `activeSheet` from one non-nil value to another.
+    @State private var pendingFollowUp: SearchSheet? = nil
+
     @State private var toastMessage: String?
     @State private var showToast = false
-    @State private var showAddPlace = false
-
-    // Prefill payload for AddPlaceTestFlow when presenting from "I went here"
-    // so the flow jumps straight to "What did you have?" instead of asking
-    // the user to re-pick the place.
-    @State private var logPrefillName = ""
-    @State private var logPrefillAddress = ""
-    @State private var logPrefillCuisine: CuisineType? = nil
 
     // Ask escalation — same pattern as MyPlaces.
     @State private var lastAskedQuery: String? = nil
@@ -276,26 +302,37 @@ struct SearchTestView: View {
                 }
             }
             .toolbar(.hidden)
-            .sheet(item: $selectedDetail) { detail in
-                searchDetailSheet(detail)
-            }
-            .sheet(isPresented: $showAddPlace, onDismiss: {
-                logPrefillName = ""
-                logPrefillAddress = ""
-                logPrefillCuisine = nil
-            }) {
-                AddPlaceTestFlow(
-                    prefillName: logPrefillName.isEmpty ? nil : logPrefillName,
-                    prefillAddress: logPrefillAddress.isEmpty ? nil : logPrefillAddress,
-                    prefillCuisine: logPrefillCuisine,
-                    onComplete: {
-                        // Route back to Home so the user lands on an updated
-                        // recommendations feed after logging from Search.
-                        selectedTab?.wrappedValue = 0
+            .sheet(item: $activeSheet, onDismiss: {
+                // Chaining: if a follow-up sheet was queued ("I
+                // went here" → addPlace), re-present it. A small
+                // asyncAfter is more reliable than .async here —
+                // it gives the dismissal animation time to complete
+                // before the next sheet tries to present, which
+                // otherwise can cause SwiftUI to drop the new sheet.
+                if let next = pendingFollowUp {
+                    pendingFollowUp = nil
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        activeSheet = next
                     }
-                )
+                }
+            }) { sheet in
+                switch sheet {
+                case .detail(let detail):
+                    searchDetailSheet(detail)
+                case .addPlace(let prefill):
+                    AddPlaceTestFlow(
+                        prefillName: prefill.name,
+                        prefillAddress: prefill.address.isEmpty ? nil : prefill.address,
+                        prefillCuisine: prefill.cuisine,
+                        onComplete: {
+                            // Route back to Home so the user lands
+                            // on an updated recommendations feed
+                            // after logging from Search.
+                            selectedTab?.wrappedValue = 0
+                        }
+                    )
                     .environmentObject(store)
-                    .id(logPrefillName)   // force a fresh view so prefill onAppear fires
+                }
             }
             .task { await loadTableData() }
             // Refetch when circle membership changes (e.g. deep-link invite
@@ -567,7 +604,7 @@ struct SearchTestView: View {
                 Spacer()
                 Button {
                     UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                    selectedDetail = buildDetailData(from: match)
+                    activeSheet = .detail(buildDetailData(from: match))
                 } label: {
                     Text("Go here \u{2192}")
                         .font(.system(size: 14, weight: .bold))
@@ -604,7 +641,7 @@ struct SearchTestView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            selectedDetail = buildDetailData(from: match)
+            activeSheet = .detail(buildDetailData(from: match))
         }
     }
 
@@ -663,7 +700,7 @@ struct SearchTestView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            selectedDetail = buildDetailData(from: match)
+            activeSheet = .detail(buildDetailData(from: match))
         }
     }
 
@@ -683,17 +720,21 @@ struct SearchTestView: View {
                 Text(item.location)
                     .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(Self.dimGray)
-                    .padding(.bottom, 8)
+                    .padding(.bottom, item.contextLine.isEmpty ? 0 : 8)
             }
 
-            // Context line — why this is worth trying
-            HStack(spacing: 6) {
-                Circle()
-                    .fill(contextColor(for: item.contextType))
-                    .frame(width: 5, height: 5)
-                Text(item.contextLine)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: "B0B0B4"))
+            // Context line — only rendered when we have a real signal
+            // to surface (taste match, popular, etc.). For plain
+            // nearby results the location above is enough.
+            if !item.contextLine.isEmpty {
+                HStack(spacing: 6) {
+                    Circle()
+                        .fill(contextColor(for: item.contextType))
+                        .frame(width: 5, height: 5)
+                    Text(item.contextLine)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "B0B0B4"))
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -708,7 +749,7 @@ struct SearchTestView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-            selectedDetail = SearchDetailData(
+            activeSheet = .detail(SearchDetailData(
                 name: item.name,
                 cuisine: "Restaurant",
                 location: item.location,
@@ -718,7 +759,7 @@ struct SearchTestView: View {
                 reasoning: item.contextLine,
                 trustLine: "New to your table",
                 memberNames: []
-            )
+            ))
         }
     }
 
@@ -769,7 +810,7 @@ struct SearchTestView: View {
         }
         .contentShape(Rectangle())
         .onTapGesture {
-            selectedDetail = buildDetailData(from: match)
+            activeSheet = .detail(buildDetailData(from: match))
         }
     }
 
@@ -852,16 +893,13 @@ struct SearchTestView: View {
                         .padding(.top, 18)
                         .padding(.bottom, 36)
 
-                    // ── CTAs ──
+                    // ── CTAs (equal weight: Go here + I went here) ──
                     VStack(spacing: 10) {
-                        // Primary: Go here
                         Button {
                             UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-                            selectedDetail = nil
+                            activeSheet = nil
                             // Wait for the detail sheet to dismiss so the
-                            // toast isn't hidden behind it, then show clear
-                            // signal that the place is noted + a reminder
-                            // will come after the visit.
+                            // toast isn't hidden behind it.
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
                                 showToastMessage("Noted \u{2014} we\u{2019}ll check in after your visit")
                             }
@@ -883,45 +921,32 @@ struct SearchTestView: View {
                         }
                         .buttonStyle(SearchCardPressStyle())
 
-                        // Secondary: I went here
                         Button {
-                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                            prefillLogFromDetail(detail)
-                            selectedDetail = nil
-                            // Wait for the detail sheet to finish dismissing
-                            // before presenting the add-place sheet, otherwise
-                            // SwiftUI silently drops the second presentation.
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                                showAddPlace = true
-                            }
+                            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                            // Prefill data is carried INSIDE the enum
+                            // case, so it's passed atomically to
+                            // AddPlaceTestFlow when the sheet presents.
+                            // Queue it and trigger dismiss; onDismiss
+                            // chain re-presents with the prefill.
+                            pendingFollowUp = .addPlace(prefillFromDetail(detail))
+                            activeSheet = nil
                         } label: {
                             Text("I went here")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(Color(hex: "B0B0B4"))
+                                .font(.system(size: 16, weight: .bold))
+                                .foregroundStyle(Color.fbText)
                                 .frame(maxWidth: .infinity)
-                                .padding(.vertical, 14)
+                                .padding(.vertical, 16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(Color.white.opacity(0.05))
+                                        .fill(Self.warmAccent.opacity(0.18))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                                        .stroke(Self.warmAccent.opacity(0.35), lineWidth: 1)
                                 )
+                                .shadow(color: Self.warmAccent.opacity(0.08), radius: 12, x: 0, y: 6)
                         }
                         .buttonStyle(SearchCardPressStyle())
-
-                        // Tertiary: Save
-                        Button {
-                            showToastMessage("Saved for later")
-                            selectedDetail = nil
-                        } label: {
-                            Text("Save for later")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Self.dimGray)
-                        }
-                        .buttonStyle(.plain)
-                        .padding(.top, 6)
                     }
                 }
                 .padding(24)
@@ -930,7 +955,7 @@ struct SearchTestView: View {
             .background(Color.fbBg)
             .toolbar {
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button { selectedDetail = nil } label: {
+                    Button { activeSheet = nil } label: {
                         Image(systemName: "xmark")
                             .font(.system(size: 13, weight: .medium))
                             .foregroundColor(Self.dimGray)
@@ -1021,43 +1046,47 @@ struct SearchTestView: View {
             }
         }
 
-        // Location-based
-        let shortLoc = shortLocation(from: result.subtitle)
-        if !shortLoc.isEmpty {
-            return ("Nearby in \(shortLoc)", .nearby)
-        }
-
-        return ("Worth exploring", .generic)
+        // Location-based: the card already shows the short location
+        // directly above, so returning "Nearby in <same city>" here
+        // duplicated it. Fall through to .nearby with an empty line —
+        // the card skips the row when contextLine is empty.
+        return ("", .nearby)
     }
 
-    /// Populate the log-prefill state from a tapped detail so that
-    /// AddPlaceTestFlow can skip its pick-place step and land the user
-    /// directly on "What did you have?" with the right restaurant loaded.
-    private func prefillLogFromDetail(_ detail: SearchDetailData) {
-        logPrefillName = detail.name
+    /// Build the AddPlaceTestFlow prefill payload from a tapped
+    /// detail. Prefers the user's own saved entry (canonical address
+    /// + cuisine), then a table entry, then the detail itself.
+    /// Returned value is bundled into `SearchSheet.addPlace` so the
+    /// prefill travels WITH the sheet presentation instead of living
+    /// in separate @State that can race with the dismissal.
+    private func prefillFromDetail(_ detail: SearchDetailData) -> AddPlacePrefill {
         let nameKey = detail.name.lowercased()
 
-        // Prefer the user's own saved entry (canonical address + cuisine).
         if let mine = store.restaurants.first(where: {
             $0.name.lowercased() == nameKey
         }) {
-            logPrefillAddress = mine.address
-            logPrefillCuisine = mine.cuisine
-            return
+            return AddPlacePrefill(
+                name: detail.name,
+                address: mine.address,
+                cuisine: mine.cuisine
+            )
         }
-        // Otherwise fall back to the table entry data we already have.
         if let table = tableRestaurants.first(where: {
             $0.name.lowercased() == nameKey
         }) {
-            logPrefillAddress = table.address
-            logPrefillCuisine = table.cuisine
-            return
+            return AddPlacePrefill(
+                name: detail.name,
+                address: table.address,
+                cuisine: table.cuisine
+            )
         }
-        // Best-effort: use the detail's own fields.
-        logPrefillAddress = detail.address
-        logPrefillCuisine = CuisineType.allCases.first(where: {
-            $0.rawValue.caseInsensitiveCompare(detail.cuisine) == .orderedSame
-        })
+        return AddPlacePrefill(
+            name: detail.name,
+            address: detail.address,
+            cuisine: CuisineType.allCases.first(where: {
+                $0.rawValue.caseInsensitiveCompare(detail.cuisine) == .orderedSame
+            })
+        )
     }
 
     private func buildDetailData(from match: SearchMatchData) -> SearchDetailData {
@@ -1227,7 +1256,7 @@ struct SearchTestView: View {
                 if let r = hit.mine { return "You went here \(r.relativeVisitDate.lowercased())" }
                 return "From your places"
             }()
-            selectedDetail = SearchDetailData(
+            activeSheet = .detail(SearchDetailData(
                 name: hit.name,
                 cuisine: hit.cuisine.rawValue,
                 location: hit.city,
@@ -1237,7 +1266,7 @@ struct SearchTestView: View {
                 reasoning: reasoning,
                 trustLine: trustLine,
                 memberNames: []
-            )
+            ))
         } label: {
             VStack(alignment: .leading, spacing: 0) {
                 HStack(alignment: .firstTextBaseline) {
@@ -1416,7 +1445,7 @@ struct SearchTestView: View {
             if let mine = store.restaurants.first(where: {
                 LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name)
             }) {
-                selectedDetail = SearchDetailData(
+                activeSheet = .detail(SearchDetailData(
                     name: mine.name,
                     cuisine: mine.cuisine.rawValue,
                     location: mine.city,
@@ -1426,7 +1455,7 @@ struct SearchTestView: View {
                     reasoning: s.reason,
                     trustLine: mine.relationshipCue ?? "From your places",
                     memberNames: []
-                )
+                ))
             } else if let entry = tableRestaurants.first(where: {
                 LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name)
             }) {
@@ -1434,7 +1463,7 @@ struct SearchTestView: View {
                     .filter { LocalSearchIndex.normalizeName($0.name) == LocalSearchIndex.normalizeName(s.name) }
                     .map { $0.userName.components(separatedBy: " ").first ?? $0.userName }
                 ))
-                selectedDetail = SearchDetailData(
+                activeSheet = .detail(SearchDetailData(
                     name: entry.name,
                     cuisine: entry.cuisine.rawValue,
                     location: shortLocation(from: entry.address),
@@ -1444,10 +1473,10 @@ struct SearchTestView: View {
                     reasoning: s.reason,
                     trustLine: buildTrustLine(names: names, visits: 1),
                     memberNames: names
-                )
+                ))
             } else {
                 // Pure suggestion (not in any source) — surface it anyway.
-                selectedDetail = SearchDetailData(
+                activeSheet = .detail(SearchDetailData(
                     name: s.name,
                     cuisine: "",
                     location: "",
@@ -1457,7 +1486,7 @@ struct SearchTestView: View {
                     reasoning: s.reason,
                     trustLine: "Suggested by ForkBook",
                     memberNames: []
-                )
+                ))
             }
         } label: {
             HStack(alignment: .top, spacing: 10) {

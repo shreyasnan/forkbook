@@ -69,3 +69,4 @@ ui-debug.log
 # Secrets (keep these explicitly excluded even if added by mistake)
 *.env
 .env.local
+ForkBook/Secrets.swift

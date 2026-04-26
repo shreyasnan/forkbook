@@ -13,28 +13,23 @@ struct SignInView: View {
             VStack(spacing: 0) {
                 Spacer()
 
-                // Logo
-                ZStack {
-                    Circle()
-                        .fill(Color.fbAccent1)
-                        .frame(width: 88, height: 88)
-
-                    Image(systemName: "fork.knife")
-                        .font(.system(size: 38, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-
-                Spacer().frame(height: 24)
-
-                VStack(spacing: 8) {
+                // Wordmark — matches LaunchScreenView so the sign-in
+                // moment is a continuation of the splash, not a hard
+                // visual change.
+                VStack(spacing: 14) {
                     Text("ForkBook")
-                        .font(.system(size: 34, weight: .bold, design: .rounded))
-                        .foregroundColor(Color.fbText)
+                        .font(.system(size: 44, weight: .bold, design: .rounded))
+                        .tracking(0.5)
+                        .foregroundStyle(Color.fbWarm)
 
-                    Text("Discover restaurants through\npeople you trust")
-                        .font(.subheadline)
-                        .foregroundColor(Color.fbMuted)
-                        .multilineTextAlignment(.center)
+                    Rectangle()
+                        .fill(Color.fbWarm.opacity(0.45))
+                        .frame(width: 36, height: 1.5)
+
+                    Text("WHERE YOUR TABLE EATS")
+                        .font(.system(size: 11, weight: .semibold, design: .rounded))
+                        .tracking(2.4)
+                        .foregroundStyle(Color.fbMuted2)
                 }
 
                 Spacer()

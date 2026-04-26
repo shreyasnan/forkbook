@@ -15,6 +15,13 @@ struct HomeTestView: View {
     @State private var selectedHero: HeroCardData? = nil
     @State private var showAddPlace = false
     @State private var showProfile = false
+
+    // Flag set by "I went here" so the detail sheet's onDismiss knows to
+    // chain straight into the add-place sheet. Using the onDismiss hook
+    // (instead of a DispatchQueue delay) is the reliable way to avoid
+    // SwiftUI's "second sheet silently dropped or instantly re-dismissed"
+    // bug when presenting two sheets in quick succession.
+    @State private var pendingAddPlaceAfterHeroDismiss = false
     @State private var currentHeroIndex: Int = 0
     @State private var logPrefillName: String = ""
     @State private var logPrefillAddress: String = ""
@@ -143,7 +150,19 @@ struct HomeTestView: View {
                 }
             }
             .navigationBarTitleDisplayMode(.inline)
-            .sheet(item: $selectedHero) { hero in
+            .sheet(
+                item: $selectedHero,
+                onDismiss: {
+                    // Chain into the add-place sheet once the detail sheet
+                    // is *fully* dismissed — SwiftUI rejects/auto-dismisses
+                    // a second sheet if it starts presenting while the
+                    // first is still animating out.
+                    if pendingAddPlaceAfterHeroDismiss {
+                        pendingAddPlaceAfterHeroDismiss = false
+                        showAddPlace = true
+                    }
+                }
+            ) { hero in
                 testDetailSheet(hero)
             }
             .sheet(isPresented: $showAddPlace, onDismiss: {
@@ -1014,30 +1033,36 @@ struct HomeTestView: View {
             .buttonStyle(HomeCardPressStyle())
 
             Button {
-                UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
                 dismissRestaurant(hero.restaurant)
                 prefillLog(for: hero)
+                // Chain via onDismiss of the hero sheet (see
+                // `pendingAddPlaceAfterHeroDismiss` above). Same pattern
+                // SearchTestView uses. If you hit the "tap twice" bug
+                // here too, the fix is to refactor to a single
+                // `.sheet(item:)` with an enum routing — see
+                // SearchTestView's SearchSheet enum for the pattern.
+                pendingAddPlaceAfterHeroDismiss = true
                 selectedHero = nil
-                // Wait for hero sheet dismiss animation to fully complete
-                // before presenting the add-place sheet, otherwise SwiftUI
-                // silently drops the second presentation.
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.45) {
-                    showAddPlace = true
-                }
             } label: {
+                // Equal visual weight with "Go here" — the primary
+                // action depends on whether the user is planning (Go)
+                // or logging (I went), and the UI shouldn't pre-bias
+                // that choice.
                 Text("I went here")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(Color(hex: "B0B0B4"))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundStyle(Color.fbText)
                     .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
+                    .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.white.opacity(0.05))
+                            .fill(Self.warmAccent.opacity(0.18))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                            .stroke(Self.warmAccent.opacity(0.35), lineWidth: 1)
                     )
+                    .shadow(color: Self.warmAccent.opacity(0.08), radius: 12, x: 0, y: 6)
             }
             .buttonStyle(HomeCardPressStyle())
 
@@ -1106,6 +1131,17 @@ struct HomeTestView: View {
         // (avoids a duplicate getMyCircles + getCircleRestaurants round trip).
         await store.importFromFirestore(prefetchedRestaurants: restaurants)
 
+        // DISABLED: syncAllToFirestore was creating a feedback loop —
+        // iCloud-restored UserDefaults entries got re-pushed to
+        // Firestore with fresh UUIDs (since importFromFirestore creates
+        // new Restaurant() instances, breaking doc-id alignment), and
+        // each app launch multiplied the duplicates. Real fix is to
+        // preserve Firestore doc IDs as the local Restaurant UUID,
+        // tracked separately. For now, individual `syncOne()` calls on
+        // user actions (add / update / delete) keep Firestore in sync;
+        // bulk re-sync is no longer automatic.
+        // store.syncAllToFirestore()
+
         let memberMap = Dictionary(uniqueKeysWithValues: members.map { ($0.uid, $0.displayName) })
         for i in restaurants.indices {
             restaurants[i].userName = memberMap[restaurants[i].userId] ?? "Friend"
@@ -1169,10 +1205,6 @@ struct HomeTestView: View {
 
         // Group table entries by name (case-insensitive)
         let byName = Dictionary(grouping: friendEntries, by: { $0.name.lowercased() })
-
-        // Also pick up user-only places (visited, loved/liked, no table match) — solo heroes
-        let myVisited = myRestaurants.filter { $0.category == .visited }
-        let namedFromTable = Set(byName.keys)
 
         var out: [ScoredCandidate] = []
 
@@ -1302,85 +1334,20 @@ struct HomeTestView: View {
             ))
         }
 
-        // Solo user candidates (no table signal yet)
-        // Skip when using mock data — personal log may contain non-veg / irrelevant entries.
-        guard !usingMockData else {
-            return out
-                .filter { !dismissedNames.contains($0.name.lowercased()) }
-                .sorted { $0.score > $1.score }
-        }
-        for r in myVisited {
-            if namedFromTable.contains(r.name.lowercased()) { continue }
-            // Only surface strong solo picks
-            let isStrong = r.isGoTo || r.reaction == .loved ||
-                (r.reaction == .liked && r.visitCount >= 2)
-            guard isStrong else { continue }
-
-            var score = 0
-            if r.isGoTo { score += 25 }
-            if r.reaction == .loved { score += 18 }
-            if r.reaction == .liked { score += 8 }
-            score += min(r.visitCount, 5) * 3
-            if let d = r.dateVisited {
-                let days = Calendar.current.dateComponents([.day], from: d, to: Date()).day ?? 999
-                if days <= 7 { score += 6 }
-            }
-
-            let topDish = r.leadDish?.name
-            let supporting = Array(r.likedDishes.dropFirst().prefix(2).map(\.name))
-            // Solo skips: dishes the user themselves thumbed-down here.
-            let soloLikedSet = Set(r.likedDishes.map { $0.name.lowercased() })
-            let soloSkipped = Array(
-                r.dislikedDishes
-                    .map(\.name)
-                    .filter { !soloLikedSet.contains($0.lowercased()) }
-                    .prefix(2)
-            )
-
-            let freshDays = r.dateVisited.map {
-                Calendar.current.dateComponents([.day], from: $0, to: Date()).day ?? 999
-            }
-            let soloChanged: String? = {
-                if let d = freshDays, d <= 7 {
-                    if r.isGoTo { return "You keep coming back, logged this week" }
-                    if r.reaction == .loved { return "You loved this recently" }
-                    if r.visitCount >= 2 { return "You came back this week" }
-                    return "Fresh in your log"
-                }
-                return nil
-            }()
-
-            let occ = OccasionClassifier.classify(
-                cuisine: r.cuisine,
-                dishNames: r.likedDishes.map { $0.name },
-                visitCount: r.visitCount,
-                reaction: r.reaction,
-                isGoTo: r.isGoTo
-            )
-
-            out.append(ScoredCandidate(
-                name: r.name,
-                cuisine: r.cuisine,
-                address: r.address,
-                latitude: r.latitude,
-                longitude: r.longitude,
-                topDish: topDish,
-                supportingDishes: supporting,
-                skippedDishes: soloSkipped,
-                memberNames: [],
-                totalTableVisits: 0,
-                topDishCount: 0,
-                isRepeat: r.visitCount >= 2,
-                userHasVisited: true,
-                userIsGoTo: r.isGoTo,
-                userLoved: r.reaction == .loved,
-                freshestDaysAgo: freshDays,
-                recentEntryCount: 0,
-                changedConfidence: soloChanged,
-                occasionScores: occ,
-                score: score
-            ))
-        }
+        // NOTE: We deliberately do NOT surface the user's own visited
+        // places as standalone "solo" candidates. Home is the trust-
+        // network feed — places someone else recommends. The user's
+        // own picks live in My Places. Surfacing them here was both
+        // redundant ("You loved it" tells me nothing new) and a
+        // duplicate-source bug, since a place could appear via both
+        // the table-signal path AND the solo path with subtle name
+        // differences (en-dash vs hyphen, etc).
+        //
+        // The user's own signal is NOT lost — when a friend logs a
+        // place the user has also visited, that's still picked up by
+        // the `myEntry` lookup in the table-signal loop above, which
+        // boosts the score and renders trust-line context like "You
+        // loved it · 3 friends rave."
 
         return out
             .filter { !dismissedNames.contains($0.name.lowercased()) }

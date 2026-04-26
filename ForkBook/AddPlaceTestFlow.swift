@@ -47,6 +47,12 @@ struct AddPlaceTestFlow: View {
     @State private var savedRestaurant: Restaurant? = nil
     @State private var showGoToNudge = false
 
+    // Place ID resolved during the flow for a first-time log — carried
+    // through to `saveVisit()` so the new Restaurant lands with a
+    // googlePlaceId in place, and RestaurantStore.resolvePlaceIdIfNeeded
+    // doesn't do a duplicate Places API call (~$0.017 saved per log).
+    @State private var resolvedPlaceId: String? = nil
+
     // ── Types ──
 
     enum LogStep: Int, CaseIterable {
@@ -55,11 +61,9 @@ struct AddPlaceTestFlow: View {
         case saved = 3
     }
 
-    enum DishVerdict: String {
-        case getAgain = "get_again"
-        case maybe = "maybe"
-        case skip = "skip"
-    }
+    // DishVerdict lives in Restaurant.swift now — promoted so DishItem can
+    // store it alongside the legacy `liked` boolean and we can reconstruct
+    // the original 3-way signal from persisted data.
 
     enum AnimationDirection {
         case forward, backward
@@ -670,6 +674,13 @@ struct AddPlaceTestFlow: View {
             restaurant.reaction = inferReaction()
             restaurant.rating = restaurant.reaction?.starRating ?? existing.rating
             if !noteText.isEmpty { restaurant.quickNote = noteText }
+            // Belt & suspenders: if the existing record somehow lost its
+            // Place ID (or never had one), backfill from what we resolved
+            // during the dish-suggestions fetch. Costs nothing; saves a
+            // duplicate Places API call from `resolvePlaceIdIfNeeded`.
+            if (restaurant.googlePlaceId ?? "").isEmpty, let resolved = resolvedPlaceId {
+                restaurant.googlePlaceId = resolved
+            }
             store.update(restaurant)
         } else {
             restaurant = Restaurant(
@@ -679,18 +690,24 @@ struct AddPlaceTestFlow: View {
                 category: .visited,
                 rating: inferReaction()?.starRating ?? 0,
                 dateVisited: Date(),
-                reaction: inferReaction()
+                reaction: inferReaction(),
+                // Pre-populated from loadMenuDishesAsync for first-time logs.
+                // If set, RestaurantStore.resolvePlaceIdIfNeeded short-
+                // circuits so we don't hit the Places API twice per log.
+                googlePlaceId: resolvedPlaceId
             )
             if !noteText.isEmpty { restaurant.quickNote = noteText }
             store.add(restaurant)
         }
 
-        // Save dish data
+        // Save dish data. We pass `verdict` (3-way) through — DishItem's
+        // initializer derives the legacy `liked` bool from it, so both the
+        // old chip/summary code (which reads `liked`) and future
+        // verdict-aware views stay consistent.
         for dish in selectedDishes {
             let verdict = dishVerdicts[dish] ?? .getAgain
-            let liked = verdict == .getAgain || verdict == .maybe
             if !restaurant.dishes.contains(where: { $0.name.lowercased() == dish.lowercased() }) {
-                restaurant.dishes.append(DishItem(name: dish, liked: liked))
+                restaurant.dishes.append(DishItem(name: dish, verdict: verdict))
             }
         }
         store.update(restaurant)
@@ -698,8 +715,59 @@ struct AddPlaceTestFlow: View {
         savedRestaurant = restaurant
         showGoToNudge = restaurant.shouldNudgeGoTo
 
+        // Append an immutable per-visit record to Firestore so we keep the
+        // full history of this trip — date, note, dishes with verdicts,
+        // reaction — separate from the rolled-up "current state" doc that
+        // syncOne() writes. Later views (per-visit timeline, richer
+        // share cards) draw from this subcollection. Fire-and-forget; any
+        // failure is logged but doesn't block the Saved screen.
+        logVisitToFirestore(for: restaurant)
+
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         goForward(to: .saved)
+    }
+
+    /// Build the visit dish snapshot from the flow state and push it. We
+    /// use the flow's `dishVerdicts` dictionary directly rather than the
+    /// restaurant's aggregated `dishes` array because a dish can exist on
+    /// the restaurant from a prior visit — we want *this* visit's verdicts.
+    private func logVisitToFirestore(for restaurant: Restaurant) {
+        let circleId = FirestoreService.shared.primaryCircleId
+        guard let circleId, !circleId.isEmpty else {
+            // Offline or circle not yet known — skip. Future visit logs
+            // will land, and the rolled-up restaurant doc still syncs via
+            // RestaurantStore, so no visible data is lost.
+            return
+        }
+
+        // Reconstruct per-visit DishItems from the picked dishes + their
+        // verdicts. Matches what a fresh Restaurant append would look like.
+        let visitDishes: [DishItem] = selectedDishes.map { name in
+            let verdict = dishVerdicts[name] ?? .getAgain
+            return DishItem(name: name, verdict: verdict)
+        }
+
+        let restaurantId = restaurant.id
+        let date = Date()
+        let note = noteText
+        let reaction = inferReaction()
+        let occasions = restaurant.occasionTags
+
+        Task {
+            do {
+                try await FirestoreService.shared.logVisit(
+                    restaurantId: restaurantId,
+                    circleId: circleId,
+                    date: date,
+                    note: note,
+                    reaction: reaction,
+                    dishes: visitDishes,
+                    occasions: occasions
+                )
+            } catch {
+                print("[Visit] failed to log visit for '\(restaurant.name)': \(error)")
+            }
+        }
     }
 
     /// Infer a place-level reaction from dish verdicts for backward compatibility
@@ -729,6 +797,15 @@ struct AddPlaceTestFlow: View {
     }
 
     private func loadDishSuggestions() {
+        // Priority order:
+        //   1. Scraped menu items keyed by googlePlaceId (real data, async)
+        //   2. Curated per-restaurant list (RestaurantDishDB — small hand-picked set)
+        //   3. Cuisine defaults (PopularDishes)
+        //
+        // We show the curated/cuisine set synchronously so the chips render
+        // immediately (no spinner), then merge menu items in at the top as
+        // soon as they arrive. Usually within ~100ms from disk cache, or
+        // one network round-trip on first view.
         var results: [String] = []
         var seen = Set<String>()
 
@@ -747,6 +824,95 @@ struct AddPlaceTestFlow: View {
         }
 
         suggestedDishes = Array(results.prefix(8))
+
+        // Async: fetch scraped menu and prepend to suggestions.
+        Task { await loadMenuDishesAsync() }
+    }
+
+    /// Fetch scraped menu items for the current prefill and prepend them
+    /// to `suggestedDishes`. Two paths:
+    ///
+    ///   • **Already-saved restaurant** — look up `googlePlaceId` directly
+    ///     from the store. No network call.
+    ///   • **First-time log** — resolve the Place ID via `PlacesResolver`
+    ///     so chips render before the user even hits Save. The result is
+    ///     stashed in `resolvedPlaceId` and threaded into `saveVisit()`
+    ///     so `RestaurantStore.resolvePlaceIdIfNeeded` short-circuits
+    ///     (avoids a duplicate Places API call, ~$0.017 per log).
+    ///
+    /// No-op if the resolver can't find a confident match — chips fall
+    /// back to the curated/cuisine heuristics already loaded synchronously.
+    private func loadMenuDishesAsync() async {
+        let nameKey = selectedName.lowercased().trimmingCharacters(in: .whitespaces)
+        guard !nameKey.isEmpty else { return }
+
+        // Fast path: already-saved restaurant with a Place ID.
+        var placeId: String? = nil
+        if let match = store.restaurants.first(where: {
+            $0.name.lowercased() == nameKey
+        }), let cached = match.googlePlaceId, !cached.isEmpty {
+            placeId = cached
+            print("[MenuChips] '\(selectedName)' already has placeId=\(cached)")
+        }
+
+        // First-time-log path: resolve via Places API and cache the result
+        // so saveVisit() can hand it to the new Restaurant record.
+        if placeId == nil {
+            let city = Restaurant.city(from: selectedAddress)
+            print("[MenuChips] '\(selectedName)' needs Place ID — resolving (city=\(city))")
+            guard let resolved = await PlacesResolver.shared.resolve(
+                name: selectedName,
+                city: city.isEmpty ? nil : city
+            ) else {
+                print("[MenuChips] Place ID resolve failed for '\(selectedName)' — menu suggestions skipped")
+                return
+            }
+            placeId = resolved.placeId
+            resolvedPlaceId = resolved.placeId
+            print("[MenuChips] resolved '\(selectedName)' → '\(resolved.matchedName)' (conf=\(resolved.confidence), \(resolved.status.rawValue))")
+        }
+
+        guard let placeId else { return }
+        print("[MenuChips] fetching menu for '\(selectedName)' (placeId=\(placeId))")
+
+        // Cap at 10 scraped items — beyond that the chip wall gets
+        // overwhelming. The scraper already ordered by price desc so
+        // these are the mains.
+        let menuDishes = await MenuDataService.shared.dishNames(
+            forPlaceId: placeId, limit: 10
+        )
+        guard !menuDishes.isEmpty else {
+            print("[MenuChips] no menu dishes returned for placeId=\(placeId) — 404 or empty file")
+            return
+        }
+        print("[MenuChips] merging \(menuDishes.count) real dishes into chips")
+
+        // Merge: scraped dishes first (real menu > curated), then the
+        // existing heuristic suggestions, deduped case-insensitively.
+        var seen = Set<String>()
+        var merged: [String] = []
+        for dish in menuDishes {
+            let lower = dish.lowercased()
+            if seen.contains(lower) { continue }
+            seen.insert(lower)
+            merged.append(dish)
+        }
+        for dish in suggestedDishes {
+            let lower = dish.lowercased()
+            if seen.contains(lower) { continue }
+            seen.insert(lower)
+            merged.append(dish)
+        }
+
+        // Cap at 12 when we have real data — a few more than the
+        // heuristic-only 8 to give real menu items room.
+        let capped = Array(merged.prefix(12))
+
+        // Animate the new chips in so users see a subtle "real menu
+        // loaded" affordance rather than a sudden jump.
+        withAnimation(.easeInOut(duration: 0.2)) {
+            suggestedDishes = capped
+        }
     }
 }
 

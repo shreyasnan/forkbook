@@ -28,7 +28,6 @@
 		A20099002FA0000000000007 /* HomeTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA0000000000008 /* HomeTestView.swift */; };
 		A20099002FA0000000000009 /* SearchTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA000000000000A /* SearchTestView.swift */; };
 		A20099002FA000000000000B /* TableTestView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20099002FA000000000000C /* TableTestView.swift */; };
-		F12D9A1B0001000000000001 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12D9A1B0001000000000002 /* FriendProfileView.swift */; };
 		C0219F662F8A0C2800CAC08D /* MenuDataService.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F652F8A0C2800CAC08D /* MenuDataService.swift */; };
 		C0219F6A2F8F58DE00CAC08D /* OccasionClassifier.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F692F8F58DE00CAC08D /* OccasionClassifier.swift */; };
 		C0219F6C2F9209BF00CAC08D /* InviteLandingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6B2F9209BF00CAC08D /* InviteLandingView.swift */; };
@@ -38,6 +37,8 @@
 		C0219F742F92117E00CAC08D /* EditProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F6E2F92117E00CAC08D /* EditProfileView.swift */; };
 		C0219F762F92120800CAC08D /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F752F92120800CAC08D /* FlowLayout.swift */; };
 		C0219F7A2F92EC7D00CAC08D /* MealWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F792F92EC7D00CAC08D /* MealWindow.swift */; };
+		C0219F7D2F95AF8B00CAC08D /* Secrets.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F7C2F95AF8B00CAC08D /* Secrets.swift */; };
+		C0219F7E2F95AF8B00CAC08D /* PlacesResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0219F7B2F95AF8B00CAC08D /* PlacesResolver.swift */; };
 		C061DCB62F7A4AC400DF79BD /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB52F7A4AC400DF79BD /* FirebaseAuth */; };
 		C061DCB82F7A4AC400DF79BD /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB72F7A4AC400DF79BD /* FirebaseCore */; };
 		C061DCBA2F7A4AC400DF79BD /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = C061DCB92F7A4AC400DF79BD /* FirebaseFirestore */; };
@@ -53,6 +54,7 @@
 		C0F040302F84BE7300958ED9 /* DebugClock.swift in Sources */ = {isa = PBXBuildFile; fileRef = C0F0402F2F84BE7300958ED9 /* DebugClock.swift */; };
 		D0AVATAR2F80000000000001 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AVATAR2F80000000000002 /* AvatarView.swift */; };
 		D0LOCMGR2F80000000000001 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0LOCMGR2F80000000000002 /* LocationManager.swift */; };
+		F12D9A1B0001000000000001 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12D9A1B0001000000000002 /* FriendProfileView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -61,7 +63,6 @@
 		A20099002FA0000000000008 /* HomeTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeTestView.swift; sourceTree = "<group>"; };
 		A20099002FA000000000000A /* SearchTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchTestView.swift; sourceTree = "<group>"; };
 		A20099002FA000000000000C /* TableTestView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TableTestView.swift; sourceTree = "<group>"; };
-		F12D9A1B0001000000000002 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
 		B10001 /* ForkBookApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ForkBookApp.swift; sourceTree = "<group>"; };
 		B10002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		B10003 /* Restaurant.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Restaurant.swift; sourceTree = "<group>"; };
@@ -88,6 +89,8 @@
 		C0219F702F92117E00CAC08D /* NotificationsSettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationsSettingsView.swift; sourceTree = "<group>"; };
 		C0219F752F92120800CAC08D /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		C0219F792F92EC7D00CAC08D /* MealWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MealWindow.swift; sourceTree = "<group>"; };
+		C0219F7B2F95AF8B00CAC08D /* PlacesResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlacesResolver.swift; sourceTree = "<group>"; };
+		C0219F7C2F95AF8B00CAC08D /* Secrets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Secrets.swift; sourceTree = "<group>"; };
 		C07B977F2F7A4FD5009FA238 /* AuthService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthService.swift; sourceTree = "<group>"; };
 		C07B97802F7A4FD5009FA238 /* FirebaseConfig.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirebaseConfig.swift; sourceTree = "<group>"; };
 		C07B97812F7A4FD5009FA238 /* FirestoreService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FirestoreService.swift; sourceTree = "<group>"; };
@@ -101,6 +104,7 @@
 		C10001 /* ForkBook.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = ForkBook.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		D0AVATAR2F80000000000002 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		D0LOCMGR2F80000000000002 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
+		F12D9A1B0001000000000002 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -137,6 +141,8 @@
 		E10002 /* ForkBook */ = {
 			isa = PBXGroup;
 			children = (
+				C0219F7B2F95AF8B00CAC08D /* PlacesResolver.swift */,
+				C0219F7C2F95AF8B00CAC08D /* Secrets.swift */,
 				C0219F792F92EC7D00CAC08D /* MealWindow.swift */,
 				C0219F752F92120800CAC08D /* FlowLayout.swift */,
 				C0219F6D2F92117E00CAC08D /* AccountMenuView.swift */,
@@ -269,6 +275,8 @@
 				A10001 /* ForkBookApp.swift in Sources */,
 				A10002 /* ContentView.swift in Sources */,
 				A10003 /* Restaurant.swift in Sources */,
+				C0219F7D2F95AF8B00CAC08D /* Secrets.swift in Sources */,
+				C0219F7E2F95AF8B00CAC08D /* PlacesResolver.swift in Sources */,
 				C0219F762F92120800CAC08D /* FlowLayout.swift in Sources */,
 				A10004 /* RestaurantStore.swift in Sources */,
 				A10005 /* RestaurantSearchService.swift in Sources */,

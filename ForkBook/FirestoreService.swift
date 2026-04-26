@@ -16,6 +16,13 @@ class FirestoreService: ObservableObject {
     /// they'd stay stuck on whatever they cached on first `.task`.
     @Published var circlesVersion: Int = 0
 
+    /// Cached "default" circle ID for the current user, populated as a side
+    /// effect of `getMyCircles()`. RestaurantStore reads this synchronously
+    /// to push local edits to Firestore without triggering a circles query
+    /// on every save. Nil until any view has fetched circles at least once
+    /// this session (ContentView does on app start).
+    @Published var primaryCircleId: String?
+
     private init() {}
 
     // MARK: - User Profile
@@ -215,7 +222,20 @@ class FirestoreService: ObservableObject {
             let snapshot = try await db.collection("circles")
                 .whereField("memberIds", arrayContains: uid)
                 .getDocuments()
-            return snapshot.documents.compactMap { try? $0.data(as: Circle.self) }
+            let circles = snapshot.documents.compactMap { try? $0.data(as: Circle.self) }
+            // Cache the first circle as the user's "primary" so RestaurantStore
+            // can push edits without re-fetching. Prefer a circle the user
+            // owns (their default table) over one they joined, so pushes
+            // don't pollute a friend's table with our updates.
+            let ownedFirst = circles.sorted { a, b in
+                let aOwned = (a.ownerId == uid) ? 0 : 1
+                let bOwned = (b.ownerId == uid) ? 0 : 1
+                return aOwned < bOwned
+            }
+            if let first = ownedFirst.first, primaryCircleId != first.id {
+                primaryCircleId = first.id
+            }
+            return circles
         } catch {
             print("Error fetching circles: \(error)")
             return []
@@ -524,9 +544,31 @@ class FirestoreService: ObservableObject {
 
     // MARK: - Restaurant Sync
 
-    /// Push a local restaurant to Firestore under a circle
+    /// Push a local restaurant to Firestore under a circle.
+    ///
+    /// The payload mirrors the full `Restaurant` model — not just the fields
+    /// the original circle-sharing feature needed — so the user's notes,
+    /// reaction, occasion tags, 3-way dish verdicts, go-to flag, etc. all
+    /// round-trip through the cloud. This is what lets us (a) restore state
+    /// on a new device, and (b) use the data later for recommendations.
     func syncRestaurant(_ restaurant: Restaurant, circleId: String) async throws {
         guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        // Each dish serializes its full metadata so collapse-to-liked isn't
+        // the only thing we preserve. Legacy rows without a verdict write
+        // a null key, which stays back-compat with the existing reader.
+        let dishPayload: [[String: Any]] = restaurant.dishes.map { dish in
+            var d: [String: Any] = [
+                "name": dish.name,
+                "liked": dish.liked,
+                "emoji": dish.emoji,
+                "isLead": dish.isLead
+            ]
+            if let verdict = dish.verdict {
+                d["verdict"] = verdict.rawValue
+            }
+            return d
+        }
 
         var data: [String: Any] = [
             "userId": uid,
@@ -536,14 +578,31 @@ class FirestoreService: ObservableObject {
             "category": restaurant.category.rawValue,
             "rating": restaurant.rating,
             "notes": restaurant.notes,
-            "dishes": restaurant.dishes.map { [
-                "name": $0.name,
-                "liked": $0.liked
-            ]},
+            "recommendedBy": restaurant.recommendedBy,
+            "dishes": dishPayload,
+            "dateAdded": restaurant.dateAdded,
             "dateVisited": restaurant.dateVisited ?? Date(),
             "visitCount": restaurant.visitCount,
+            "quickNote": restaurant.quickNote,
+            "personalNote": restaurant.personalNote,
+            "isGoTo": restaurant.isGoTo,
+            "goToNudgeShown": restaurant.goToNudgeShown,
+            "saveReason": restaurant.saveReason,
+            "occasionTags": restaurant.occasionTags.map(\.rawValue),
             "updatedAt": Date()
         ]
+
+        // Reaction is optional — only write it when set so we don't clobber
+        // a real reaction with an empty string.
+        if let reaction = restaurant.reaction {
+            data["reaction"] = reaction.rawValue
+        }
+
+        // Include Google Place ID if resolved — lets other devices skip the
+        // resolver on their end.
+        if let placeId = restaurant.googlePlaceId, !placeId.isEmpty {
+            data["googlePlaceId"] = placeId
+        }
 
         // Include coordinates if available
         if let lat = restaurant.latitude, let lng = restaurant.longitude {
@@ -570,10 +629,20 @@ class FirestoreService: ObservableObject {
                       let userId = data["userId"] as? String else { return nil }
 
                 let dishData = data["dishes"] as? [[String: Any]] ?? []
-                let dishes = dishData.map { d in
-                    DishItem(
+                let dishes = dishData.map { d -> DishItem in
+                    // Prefer verdict when present — DishItem's init will
+                    // derive `liked` from it — and fall back to the old
+                    // `liked` bool for rows written before verdict existed.
+                    let verdict = (d["verdict"] as? String).flatMap(DishVerdict.init(rawValue:))
+                    let emoji = d["emoji"] as? String ?? "🍽️"
+                    let isLead = d["isLead"] as? Bool ?? false
+                    let liked = d["liked"] as? Bool ?? true
+                    return DishItem(
                         name: d["name"] as? String ?? "",
-                        liked: d["liked"] as? Bool ?? true
+                        liked: liked,
+                        emoji: emoji,
+                        isLead: isLead,
+                        verdict: verdict
                     )
                 }
 
@@ -594,6 +663,89 @@ class FirestoreService: ObservableObject {
             }
         } catch {
             print("Error fetching circle restaurants: \(error)")
+            return []
+        }
+    }
+
+    // MARK: - Visit History (append-only)
+    //
+    // Each log-flow save writes a single, immutable Visit document. Unlike
+    // the `restaurants/{id}` doc — which is overwritten with the "current"
+    // aggregate state (visitCount, last note, etc.) — visits are an audit
+    // trail: one row per "I went here" tap, preserving the date, the
+    // dishes-and-verdicts snapshot, and whatever note the user typed that
+    // night. This is what future views will draw from for "your history at
+    // this restaurant" or per-visit share cards, and what future ML would
+    // use to learn the user's taste over time without losing the raw signal.
+
+    struct VisitDishLog: Codable {
+        var name: String
+        var verdict: String?  // raw DishVerdict value, or nil if not captured
+        var liked: Bool       // derived convenience for legacy readers
+    }
+
+    /// Append a visit record to a restaurant's history. Fire-and-forget from
+    /// callers — failures are logged but don't block the UI.
+    func logVisit(
+        restaurantId: UUID,
+        circleId: String,
+        date: Date,
+        note: String,
+        reaction: Reaction?,
+        dishes: [DishItem],
+        occasions: [OccasionTag]
+    ) async throws {
+        guard let uid = Auth.auth().currentUser?.uid else { return }
+
+        let dishPayload: [[String: Any]] = dishes.map { dish in
+            var d: [String: Any] = [
+                "name": dish.name,
+                "liked": dish.liked
+            ]
+            if let verdict = dish.verdict {
+                d["verdict"] = verdict.rawValue
+            }
+            return d
+        }
+
+        var data: [String: Any] = [
+            "userId": uid,
+            "date": date,
+            "note": note,
+            "dishes": dishPayload,
+            "occasions": occasions.map(\.rawValue),
+            "createdAt": Date()
+        ]
+        if let reaction = reaction {
+            data["reaction"] = reaction.rawValue
+        }
+
+        // Firestore auto-assigns a document ID here — we don't need a
+        // client-side UUID because visits aren't referenced by other
+        // records; they're only read back as a collection, ordered by date.
+        try await db.collection("circles").document(circleId)
+            .collection("restaurants").document(restaurantId.uuidString)
+            .collection("visits")
+            .addDocument(data: data)
+    }
+
+    /// Fetch the full visit history for a restaurant, newest first.
+    /// Returned as raw dictionaries — keep the wire format flexible since
+    /// the shape of a Visit may grow (photos, who-you-were-with, etc.).
+    func getVisits(restaurantId: UUID, circleId: String) async -> [[String: Any]] {
+        do {
+            let snapshot = try await db.collection("circles").document(circleId)
+                .collection("restaurants").document(restaurantId.uuidString)
+                .collection("visits")
+                .order(by: "date", descending: true)
+                .getDocuments()
+            return snapshot.documents.map { doc in
+                var data = doc.data()
+                data["id"] = doc.documentID
+                return data
+            }
+        } catch {
+            print("Error fetching visits: \(error)")
             return []
         }
     }

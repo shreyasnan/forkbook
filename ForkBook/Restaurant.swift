@@ -127,21 +127,61 @@ struct TastePreferences: Codable {
     }
 }
 
+// MARK: - Dish Verdict
+//
+// Three-way per-dish signal captured in the log flow. We collapse this to
+// `DishItem.liked: Bool` for existing UI (chips, counters, card summaries),
+// but we ALSO preserve the original verdict so higher-fidelity views and
+// future recommendations can tell "Skip" apart from "Okay" — information
+// that `liked=false` alone loses.
+//
+// Source of truth: AddPlaceTestFlow. Raw values are the same snake_case
+// strings the log flow always used, so old in-memory state is unaffected.
+enum DishVerdict: String, Codable, CaseIterable {
+    case getAgain = "get_again"
+    case maybe = "maybe"
+    case skip = "skip"
+
+    /// Map verdict → legacy `liked` boolean. getAgain/maybe both count as
+    /// liked; only skip is disliked. Matches the mapping AddPlaceTestFlow
+    /// was doing inline before this field existed, so card counts don't
+    /// shift for existing data.
+    var liked: Bool {
+        switch self {
+        case .getAgain, .maybe: return true
+        case .skip: return false
+        }
+    }
+}
+
 // MARK: - Dish Item
 
 struct DishItem: Identifiable, Codable, Hashable {
     var id: UUID
     var name: String
-    var liked: Bool         // true = liked, false = disliked
+    var liked: Bool         // true = liked, false = disliked (legacy — derived from verdict when present)
     var emoji: String       // e.g. "🍳"
     var isLead: Bool        // the standout dish for this restaurant
+    var verdict: DishVerdict? // 3-way signal from the log flow; nil for legacy dishes logged before we tracked this
 
-    init(id: UUID = UUID(), name: String, liked: Bool = true, emoji: String = "🍽️", isLead: Bool = false) {
+    init(
+        id: UUID = UUID(),
+        name: String,
+        liked: Bool = true,
+        emoji: String = "🍽️",
+        isLead: Bool = false,
+        verdict: DishVerdict? = nil
+    ) {
         self.id = id
         self.name = name
-        self.liked = liked
+        // When a verdict is provided, it's the source of truth — `liked`
+        // is a derived convenience. This keeps the two fields consistent
+        // at construction time so downstream code never sees a verdict=skip
+        // dish flagged liked=true.
+        self.liked = verdict?.liked ?? liked
         self.emoji = emoji
         self.isLead = isLead
+        self.verdict = verdict
     }
 
     // Backward-compatible decoding
@@ -152,6 +192,7 @@ struct DishItem: Identifiable, Codable, Hashable {
         liked = try container.decode(Bool.self, forKey: .liked)
         emoji = try container.decodeIfPresent(String.self, forKey: .emoji) ?? "🍽️"
         isLead = try container.decodeIfPresent(Bool.self, forKey: .isLead) ?? false
+        verdict = try container.decodeIfPresent(DishVerdict.self, forKey: .verdict)
     }
 }
 
@@ -179,6 +220,8 @@ struct Restaurant: Identifiable, Codable {
     var saveReason: String          // Auto-captured context when saved: "From Jay's recommendation"
     var latitude: Double?
     var longitude: Double?
+    var googlePlaceId: String?      // Stable Google Place ID — used to look up menu data.
+                                    // Populated on add for new records, backfilled for old ones.
 
     init(
         id: UUID = UUID(),
@@ -201,7 +244,8 @@ struct Restaurant: Identifiable, Codable {
         goToNudgeShown: Bool = false,
         saveReason: String = "",
         latitude: Double? = nil,
-        longitude: Double? = nil
+        longitude: Double? = nil,
+        googlePlaceId: String? = nil
     ) {
         self.id = id
         self.name = name
@@ -224,6 +268,7 @@ struct Restaurant: Identifiable, Codable {
         self.saveReason = saveReason
         self.latitude = latitude
         self.longitude = longitude
+        self.googlePlaceId = googlePlaceId
     }
 
     // Custom decoding for backward compat
@@ -233,6 +278,7 @@ struct Restaurant: Identifiable, Codable {
         case reaction, occasionTags, quickNote, personalNote
         case isGoTo, goToNudgeShown, saveReason
         case latitude, longitude
+        case googlePlaceId
     }
 
     init(from decoder: Decoder) throws {
@@ -259,6 +305,7 @@ struct Restaurant: Identifiable, Codable {
         saveReason = try container.decodeIfPresent(String.self, forKey: .saveReason) ?? ""
         latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
         longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
+        googlePlaceId = try container.decodeIfPresent(String.self, forKey: .googlePlaceId)
     }
 
     // MARK: - Helpers
@@ -267,13 +314,21 @@ struct Restaurant: Identifiable, Codable {
     var dislikedDishes: [DishItem] { dishes.filter { !$0.liked } }
     var leadDish: DishItem? { dishes.first(where: { $0.isLead }) ?? likedDishes.first }
 
-    /// Extract city from address. Handles common formats:
+    /// Extract city from this restaurant's address.
+    var city: String { Restaurant.city(from: address) }
+
+    /// Parse the city component out of a comma-separated address string.
+    /// Static so callers that don't have a full `Restaurant` yet (e.g. the
+    /// log-flow dish-chip loader resolving a Place ID for a just-picked
+    /// MapKit result) can still get a city for Places queries.
+    ///
+    /// Handles common formats:
     /// - "123 Main St, San Francisco, CA 94103" → "San Francisco"
     /// - "123 Main St, San Francisco, CA 94103, USA" → "San Francisco"
     /// - "San Francisco, CA" → "San Francisco"
     /// - "San Francisco" → "San Francisco"
     /// Strips trailing state/zip/country if misidentified.
-    var city: String {
+    static func city(from address: String) -> String {
         let parts = address
             .components(separatedBy: ",")
             .map { $0.trimmingCharacters(in: .whitespaces) }
