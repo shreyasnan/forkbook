@@ -3,9 +3,17 @@ import FirebaseAuth
 
 struct ContentView: View {
     @EnvironmentObject var store: RestaurantStore
-    // Onboarding disabled for now — re-enable when ready to ship.
-    // @State private var showOnboarding = false
-    // @State private var hasCheckedOnboarding = false
+
+    /// Onboarding gate. Three-state machine:
+    ///   - `nil` while we're asking Firestore if the user has finished
+    ///     onboarding before. Renders LaunchScreenView so the empty
+    ///     TabView never flashes.
+    ///   - `true`  → show TasteOnboardingView until completion.
+    ///   - `false` → show the main TabView.
+    /// `TasteOnboardingView` writes `onboardingCompleted=true` to
+    /// Firestore on its own when the user finishes, so we just need
+    /// to flip this state when its onComplete fires.
+    @State private var needsOnboarding: Bool? = nil
 
     // Tracks the currently selected tab. Exposed as a Binding to child views
     // that need to programmatically switch tabs — e.g. Search routes the user
@@ -36,6 +44,33 @@ struct ContentView: View {
     }
 
     var body: some View {
+        Group {
+            switch needsOnboarding {
+            case nil:
+                // Brief loading window while we ask Firestore if this
+                // user has onboarded before. Hides the tab-flash that
+                // would otherwise happen.
+                LaunchScreenView()
+            case .some(true):
+                TasteOnboardingView {
+                    // TasteOnboardingView already wrote onboardingCompleted=true
+                    // to Firestore inside its own save flow; we just dismiss.
+                    needsOnboarding = false
+                }
+            case .some(false):
+                mainTabView
+            }
+        }
+        .task {
+            // Only check once per ContentView appearance. AuthService
+            // controls when ContentView is shown vs SignInView, so by
+            // the time we get here the user is signed in.
+            let prefs = await FirestoreService.shared.getTastePreferences()
+            needsOnboarding = !prefs.onboardingCompleted
+        }
+    }
+
+    private var mainTabView: some View {
         TabView(selection: $selectedTab) {
             HomeTestView()
                 .tabItem {
