@@ -36,6 +36,36 @@ struct MyPlacesTestView: View {
     // rather than a new MyPlaces route (the user has no memory page for them).
     @State private var selectedTableHit: LocalSearchHit? = nil
 
+    // Place-detail action state.
+    @State private var shareText: String? = nil
+    @State private var transientToast: String? = nil
+    @State private var showAccount = false
+    /// Set when the user taps "Log again" — drives the AddPlaceTestFlow
+    /// sheet. Prefilled with the restaurant's current name/address/cuisine
+    /// so the flow skips its (no-longer-extant) pick-place step and lands
+    /// directly on dish capture. AddPlaceTestFlow.saveVisit() already
+    /// matches by name and updates the existing restaurant in place
+    /// (bumps visit count, sets dateVisited, appends any new dishes,
+    /// writes a per-visit Firestore record), so Log again just reuses
+    /// the same code path that Search → "I went here" does.
+    @State private var logAgainPrefill: LogAgainPrefill? = nil
+
+    /// Identifiable carrier so we can drive the AddPlaceTestFlow sheet
+    /// via `.sheet(item:)` and have SwiftUI re-create the flow with
+    /// fresh state every time the user taps "Log again".
+    struct LogAgainPrefill: Identifiable {
+        let id = UUID()
+        let name: String
+        let address: String
+        let cuisine: CuisineType
+    }
+
+    /// Set when the user taps "Add a dish" — drives the
+    /// AddForgottenDishesSheet. Carries the full Restaurant so the sheet
+    /// can pre-filter suggestions against existing dishes and patch the
+    /// right doc on save.
+    @State private var addDishesTo: Restaurant? = nil
+
     private var currentUid: String? { Auth.auth().currentUser?.uid }
 
     // MARK: Routes
@@ -78,6 +108,35 @@ struct MyPlacesTestView: View {
         .sheet(item: $selectedTableHit) { hit in
             tableHitSheet(hit)
         }
+        .sheet(isPresented: Binding(
+            get: { shareText != nil },
+            set: { if !$0 { shareText = nil } }
+        )) {
+            if let text = shareText {
+                ShareSheet(text: text)
+            }
+        }
+        .sheet(item: $logAgainPrefill) { prefill in
+            AddPlaceTestFlow(
+                prefillName: prefill.name,
+                prefillAddress: prefill.address.isEmpty ? nil : prefill.address,
+                prefillCuisine: prefill.cuisine
+            )
+            .environmentObject(store)
+        }
+        .sheet(item: $addDishesTo) { r in
+            AddForgottenDishesSheet(restaurant: r)
+                .environmentObject(store)
+        }
+        .overlay(alignment: .bottom) {
+            if let toast = transientToast {
+                FBToast(message: toast, style: .standard)
+                    .padding(.bottom, 90)
+                    .transition(.opacity.combined(with: .move(edge: .bottom)))
+            }
+        }
+        .animation(.easeInOut(duration: 0.2), value: transientToast)
+        .accountMenu(isPresented: $showAccount, store: store)
     }
 
     // =========================================================================
@@ -751,23 +810,51 @@ struct MyPlacesTestView: View {
                     .padding(.horizontal, 16)
                 }
 
-                sectionLabel("WHAT TO REMEMBER")
-                    .padding(.top, 26)
+                if !place.mostRepeated.isEmpty {
+                    sectionLabel("WHAT TO REMEMBER")
+                        .padding(.top, 26)
 
-                VStack(spacing: 10) {
-                    if !place.mostRepeated.isEmpty {
+                    VStack(spacing: 10) {
                         memoryRow(name: "Standout dish", detail: place.mostRepeated)
                     }
-                    memoryRow(name: "Recommendation confidence", detail: place.confidence)
+                    .padding(.horizontal, 16)
                 }
-                .padding(.horizontal, 16)
 
                 sectionLabel("ACTIONS")
                     .padding(.top, 26)
 
                 HStack(spacing: 10) {
-                    actionButton("Log again")
-                    actionButton("Recommend")
+                    actionButton("Log again") {
+                        guard let r = restaurantByIdString(place.id) else { return }
+                        // Route through the same dish-capture flow Search
+                        // and Home use for "I went here". The flow's
+                        // saveVisit() matches by name and updates the
+                        // existing restaurant — so this captures what
+                        // they ate THIS time (new dishes + verdicts),
+                        // bumps visit count, and writes a per-visit
+                        // Firestore record. Bumping the count silently
+                        // would throw away the dish capture, which is
+                        // the actual signal we care about.
+                        logAgainPrefill = LogAgainPrefill(
+                            name: r.name,
+                            address: r.address,
+                            cuisine: r.cuisine
+                        )
+                    }
+                    actionButton("Add a dish") {
+                        // Distinct from "Log again": adds dishes you
+                        // forgot to log on the most-recent visit, without
+                        // creating a phantom new visit or bumping the
+                        // count. Patches the latest visit's dish
+                        // snapshot in Firestore so the timeline reflects
+                        // the corrected order.
+                        guard let r = restaurantByIdString(place.id) else { return }
+                        addDishesTo = r
+                    }
+                    actionButton("Recommend") {
+                        guard let r = restaurantByIdString(place.id) else { return }
+                        shareText = recommendShareText(for: r)
+                    }
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 16)
@@ -775,6 +862,27 @@ struct MyPlacesTestView: View {
                 Spacer(minLength: 80)
             }
         }
+    }
+
+    /// Build a short share blurb for the "Recommend" action — name, city,
+    /// the user's favorite dish (if any), and a personal note (if any).
+    /// Plain-text so it copy-pastes cleanly into Messages, email, etc.
+    private func recommendShareText(for r: Restaurant) -> String {
+        var parts: [String] = []
+        var line = r.name
+        if !r.city.isEmpty { line += " (\(r.city))" }
+        parts.append(line)
+
+        if let lead = r.leadDish {
+            parts.append("Order the \(lead.name).")
+        } else if let firstLiked = r.likedDishes.first {
+            parts.append("Try the \(firstLiked.name).")
+        }
+
+        let note = r.quickNote.isEmpty ? r.personalNote : r.quickNote
+        if !note.isEmpty { parts.append(note) }
+
+        return parts.joined(separator: " — ")
     }
 
     // =========================================================================
@@ -1007,23 +1115,24 @@ struct MyPlacesTestView: View {
     // =========================================================================
 
     private func headerBlock(title: String, subtitle: String? = nil) -> some View {
-        // Avatar/profile link removed — profile is reachable from the Home
-        // tab via AccountMenuView. Keeps this surface focused on place
-        // memory without a tappable identity affordance competing for
-        // attention with the search bar.
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title)
-                .font(.system(size: 26, weight: .heavy))
-                .tracking(-0.5)
-                .foregroundStyle(Color.fbText)
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text(title)
+                    .font(.system(size: 26, weight: .heavy))
+                    .tracking(-0.5)
+                    .foregroundStyle(Color.fbText)
 
-            if let subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Color(hex: "8E8E93"))
+                if let subtitle, !subtitle.isEmpty {
+                    Text(subtitle)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(Color(hex: "8E8E93"))
+                }
             }
+
+            Spacer()
+
+            BurgerMenuButton { showAccount = true }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 20)
         .padding(.top, 12)
     }
@@ -1589,9 +1698,10 @@ struct MyPlacesTestView: View {
     // MARK: - Action Button + Section Label
     // =========================================================================
 
-    private func actionButton(_ label: String) -> some View {
+    private func actionButton(_ label: String, action: @escaping () -> Void = {}) -> some View {
         Button {
             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+            action()
         } label: {
             Text(label)
                 .font(.system(size: 13, weight: .bold))
@@ -1809,6 +1919,308 @@ private struct MyPlacesPressStyle: ButtonStyle {
             .scaleEffect(configuration.isPressed ? 0.985 : 1.0)
             .brightness(configuration.isPressed ? 0.015 : 0)
             .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+    }
+}
+
+// =========================================================================
+// MARK: - Add Forgotten Dishes Sheet
+// =========================================================================
+//
+// Single-screen, no-step flow that captures dishes the user forgot to log.
+// Distinct from AddPlaceTestFlow because:
+//   • It does NOT bump visitCount or change dateVisited.
+//   • It does NOT write a new visit Firestore record.
+//   • It patches the latest visit's dish snapshot in place
+//     (FirestoreService.appendDishesToLatestVisit).
+//
+// Suggestions are pulled from the same sources AddPlaceTestFlow uses
+// (cached menu by placeId → RestaurantDishDB → PopularDishes for cuisine),
+// but pre-filtered to exclude dishes already on the restaurant — the
+// whole point of the screen is "add what's missing", so showing dishes
+// that are already logged is noise.
+
+struct AddForgottenDishesSheet: View {
+    @EnvironmentObject var store: RestaurantStore
+    @Environment(\.dismiss) private var dismiss
+
+    let restaurant: Restaurant
+
+    @State private var suggested: [String] = []
+    @State private var selected: Set<String> = []
+    @State private var verdicts: [String: DishVerdict] = [:]
+    @State private var customDishText: String = ""
+
+    // Match AddPlaceTestFlow's verdict palette so the pills look identical.
+    private static let verdictGetAgain = Color(hex: "C4A882")   // fbWarm
+    private static let verdictMaybe = Color(hex: "8E8E93")
+    private static let verdictSkip = Color(hex: "6B6560")
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.fbBg.ignoresSafeArea()
+
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 22) {
+                        VStack(alignment: .leading, spacing: 6) {
+                            Text("Add what you forgot")
+                                .font(.system(size: 22, weight: .heavy))
+                                .foregroundStyle(Color.fbText)
+                            Text(restaurant.name)
+                                .font(.system(size: 14, weight: .medium))
+                                .foregroundStyle(Color.fbMuted)
+                        }
+
+                        if !suggested.isEmpty {
+                            FlowLayout(spacing: 8) {
+                                ForEach(suggested, id: \.self) { dish in
+                                    suggestionChip(dish)
+                                }
+                            }
+                        } else {
+                            Text("No suggestions to show — add a dish below.")
+                                .font(.system(size: 13, weight: .medium))
+                                .foregroundStyle(Color.fbMuted2)
+                        }
+
+                        // Custom dish input — same shape as AddPlaceTestFlow's
+                        // so the affordance feels consistent across screens.
+                        HStack(spacing: 10) {
+                            TextField("Add a dish…", text: $customDishText)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundStyle(Color.fbText)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 12)
+                                .background(Capsule().fill(Color.white.opacity(0.05)))
+                                .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
+                                .submitLabel(.done)
+                                .onSubmit(addCustomDish)
+
+                            Button(action: addCustomDish) {
+                                Image(systemName: "plus")
+                                    .font(.system(size: 14, weight: .bold))
+                                    .foregroundColor(Color.fbText)
+                                    .frame(width: 36, height: 36)
+                                    .background(Circle().fill(Self.verdictGetAgain.opacity(0.18)))
+                                    .overlay(Circle().stroke(Self.verdictGetAgain.opacity(0.40), lineWidth: 1))
+                            }
+                            .disabled(customDishText.trimmingCharacters(in: .whitespaces).isEmpty)
+                            .opacity(customDishText.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1.0)
+                        }
+
+                        if !selected.isEmpty {
+                            // Sort for a stable order — Set<String> has
+                            // no inherent order, and SwiftUI re-renders
+                            // would otherwise shuffle the rows on each
+                            // state change.
+                            let sortedSelected = selected.sorted()
+                            VStack(spacing: 0) {
+                                ForEach(Array(sortedSelected.enumerated()), id: \.element) { idx, dish in
+                                    selectedDishRow(dish)
+                                    if idx < sortedSelected.count - 1 {
+                                        Divider().background(Color.white.opacity(0.05))
+                                    }
+                                }
+                            }
+                            .padding(.vertical, 6)
+                            .padding(.horizontal, 14)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(Color.white.opacity(0.03))
+                            )
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                            )
+                        }
+
+                        Spacer(minLength: 80)
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 16)
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    Button("Cancel") { dismiss() }
+                        .foregroundColor(Color.fbMuted)
+                }
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button("Save") { save() }
+                        .foregroundColor(selected.isEmpty ? Color.fbMuted2 : Self.verdictGetAgain)
+                        .disabled(selected.isEmpty)
+                }
+            }
+            .onAppear(perform: loadSuggestions)
+        }
+    }
+
+    // MARK: - Subviews
+
+    private func suggestionChip(_ dish: String) -> some View {
+        let isSelected = selected.contains(dish)
+        return Button {
+            withAnimation(.easeInOut(duration: 0.12)) {
+                if isSelected {
+                    selected.remove(dish)
+                    verdicts.removeValue(forKey: dish)
+                } else {
+                    selected.insert(dish)
+                    verdicts[dish] = .getAgain
+                }
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Text(dish)
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(isSelected ? Color.fbText : Color.fbMuted)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 11)
+                .background(
+                    Capsule().fill(
+                        isSelected
+                            ? Self.verdictGetAgain.opacity(0.15)
+                            : Color.white.opacity(0.06)
+                    )
+                )
+                .overlay(
+                    Capsule().stroke(
+                        isSelected
+                            ? Self.verdictGetAgain.opacity(0.40)
+                            : Color.white.opacity(0.22),
+                        lineWidth: 1
+                    )
+                )
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    private func selectedDishRow(_ dish: String) -> some View {
+        let verdict = verdicts[dish] ?? .getAgain
+        return HStack(spacing: 0) {
+            Text(dish)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(Color.fbText)
+                .lineLimit(1)
+            Spacer(minLength: 12)
+            HStack(spacing: 6) {
+                statePill("Amazing", for: .getAgain, current: verdict, dish: dish)
+                statePill("Okay", for: .maybe, current: verdict, dish: dish)
+                statePill("Skip", for: .skip, current: verdict, dish: dish)
+            }
+        }
+        .padding(.vertical, 10)
+    }
+
+    private func statePill(_ label: String, for verdict: DishVerdict, current: DishVerdict, dish: String) -> some View {
+        let isActive = current == verdict
+        let activeColor: Color = {
+            switch verdict {
+            case .getAgain: return Self.verdictGetAgain
+            case .maybe:    return Self.verdictMaybe
+            case .skip:     return Self.verdictSkip
+            }
+        }()
+        return Button {
+            withAnimation(.easeInOut(duration: 0.12)) {
+                verdicts[dish] = verdict
+            }
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        } label: {
+            Text(label)
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundStyle(isActive ? activeColor : Color.fbMuted2.opacity(0.6))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isActive ? activeColor.opacity(0.12) : Color.white.opacity(0.02)))
+                .overlay(Capsule().stroke(isActive ? activeColor.opacity(0.25) : Color.white.opacity(0.04), lineWidth: 1))
+        }
+        .buttonStyle(MyPlacesPressStyle())
+    }
+
+    // MARK: - Actions
+
+    private func addCustomDish() {
+        let trimmed = customDishText.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty else { return }
+        // Skip dishes already on the restaurant — the whole sheet is for
+        // adding what's missing, so silently no-op rather than confuse
+        // the user with a duplicate.
+        let alreadyOnRestaurant = restaurant.dishes.contains { $0.name.lowercased() == trimmed.lowercased() }
+        if alreadyOnRestaurant {
+            customDishText = ""
+            return
+        }
+        if !suggested.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
+            suggested.insert(trimmed, at: 0)
+        }
+        selected.insert(trimmed)
+        verdicts[trimmed] = .getAgain
+        customDishText = ""
+    }
+
+    private func save() {
+        let dishes: [DishItem] = selected.map { name in
+            let verdict = verdicts[name] ?? .getAgain
+            return DishItem(name: name, verdict: verdict)
+        }
+        store.appendForgottenDishes(to: restaurant, dishes: dishes)
+        dismiss()
+    }
+
+    // MARK: - Suggestion loading
+    //
+    // Same priority order as AddPlaceTestFlow.loadDishSuggestions, but
+    // post-filtered against the restaurant's existing dishes — the whole
+    // point of the sheet is "what's missing", so showing already-logged
+    // dishes is noise.
+
+    private func loadSuggestions() {
+        var results: [String] = []
+        var seen = Set<String>()
+        let alreadyOnRestaurant = Set(restaurant.dishes.map { $0.name.lowercased() })
+
+        // 1. Cached menu items keyed by Place ID, if any. No await — if
+        //    the menu isn't cached we just fall through; the user can
+        //    type custom dishes.
+        if let placeId = restaurant.googlePlaceId, !placeId.isEmpty {
+            let menuDishes = MenuDataService.shared.cachedDishes(forPlaceId: placeId)
+            for d in menuDishes {
+                let key = d.name.lowercased()
+                if !seen.contains(key) && !alreadyOnRestaurant.contains(key) {
+                    seen.insert(key)
+                    results.append(d.name)
+                }
+            }
+            // Fire a prefetch so a re-open after the network round-trip
+            // shows the menu suggestions too.
+            MenuDataService.shared.prefetch(placeId: placeId)
+        }
+
+        // 2. Curated per-restaurant list (small hand-picked set).
+        if let curated = RestaurantDishDB.lookup(restaurant.name) {
+            for d in curated {
+                let key = d.lowercased()
+                if !seen.contains(key) && !alreadyOnRestaurant.contains(key) {
+                    seen.insert(key)
+                    results.append(d)
+                }
+            }
+        }
+
+        // 3. Cuisine defaults.
+        if restaurant.cuisine != .other {
+            for d in PopularDishes.dishes(for: restaurant.cuisine) {
+                let key = d.lowercased()
+                if !seen.contains(key) && !alreadyOnRestaurant.contains(key) {
+                    seen.insert(key)
+                    results.append(d)
+                }
+            }
+        }
+
+        suggested = Array(results.prefix(12))
     }
 }
 

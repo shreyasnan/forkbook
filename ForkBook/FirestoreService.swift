@@ -729,6 +729,57 @@ class FirestoreService: ObservableObject {
             .addDocument(data: data)
     }
 
+    /// Patch the most-recent visit's dish list — used by the "I forgot to
+    /// add some dishes" flow on Place memory. Looks up the newest visit by
+    /// date and merges in the new dish payloads. We patch instead of
+    /// writing a new visit so we don't fabricate phantom visit records
+    /// for "oh, I also had the kebab" edits.
+    ///
+    /// If there are no existing visits (shouldn't normally happen — the
+    /// caller is editing a place that's been logged at least once), we
+    /// just no-op rather than create one with a wrong date.
+    func appendDishesToLatestVisit(
+        restaurantId: UUID,
+        circleId: String,
+        dishes: [DishItem]
+    ) async throws {
+        guard !dishes.isEmpty else { return }
+
+        let visitsRef = db.collection("circles").document(circleId)
+            .collection("restaurants").document(restaurantId.uuidString)
+            .collection("visits")
+
+        let snapshot = try await visitsRef
+            .order(by: "date", descending: true)
+            .limit(to: 1)
+            .getDocuments()
+
+        guard let latest = snapshot.documents.first else {
+            print("[Visit] no existing visits to patch for restaurant \(restaurantId)")
+            return
+        }
+
+        // Merge with the visit's existing dish list, dedup-by-name, so a
+        // double-tap or re-open doesn't create duplicates on the wire.
+        let existing = (latest.data()["dishes"] as? [[String: Any]]) ?? []
+        let existingNames = Set(existing.compactMap { ($0["name"] as? String)?.lowercased() })
+
+        let newPayload: [[String: Any]] = dishes.compactMap { dish in
+            guard !existingNames.contains(dish.name.lowercased()) else { return nil }
+            var d: [String: Any] = ["name": dish.name, "liked": dish.liked]
+            if let verdict = dish.verdict {
+                d["verdict"] = verdict.rawValue
+            }
+            return d
+        }
+        guard !newPayload.isEmpty else { return }
+
+        try await latest.reference.updateData([
+            "dishes": existing + newPayload,
+            "updatedAt": Date()
+        ])
+    }
+
     /// Fetch the full visit history for a restaurant, newest first.
     /// Returned as raw dictionaries — keep the wire format flexible since
     /// the shape of a Visit may grow (photos, who-you-were-with, etc.).

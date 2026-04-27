@@ -64,6 +64,11 @@ struct SearchTestView: View {
     @State private var toastMessage: String?
     @State private var showToast = false
 
+    // Account menu (top-right burger) — sheet-presented so it's reachable
+    // from inside the Search NavigationStack without colliding with the
+    // detail/addPlace sheet routing.
+    @State private var showAccount = false
+
     // Ask escalation — same pattern as MyPlaces.
     @State private var lastAskedQuery: String? = nil
 
@@ -267,6 +272,7 @@ struct SearchTestView: View {
                             .font(.system(size: 26, weight: .heavy))
                             .tracking(-0.5)
                         Spacer()
+                        BurgerMenuButton { showAccount = true }
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 18)
@@ -344,6 +350,7 @@ struct SearchTestView: View {
                 searchService.searchText = newValue
             }
         }
+        .accountMenu(isPresented: $showAccount, store: store)
     }
 
     // =========================================================================
@@ -931,6 +938,10 @@ struct SearchTestView: View {
                             pendingFollowUp = .addPlace(prefillFromDetail(detail))
                             activeSheet = nil
                         } label: {
+                            // Distinct hue from "Go here" (warm sand →
+                            // planning) so the past-tense logging action
+                            // reads differently from the future-tense
+                            // committing action.
                             Text("I went here")
                                 .font(.system(size: 16, weight: .bold))
                                 .foregroundStyle(Color.fbText)
@@ -938,13 +949,13 @@ struct SearchTestView: View {
                                 .padding(.vertical, 16)
                                 .background(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .fill(Self.warmAccent.opacity(0.18))
+                                        .fill(Color.fbAccent1.opacity(0.20))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                        .stroke(Self.warmAccent.opacity(0.35), lineWidth: 1)
+                                        .stroke(Color.fbAccent1.opacity(0.45), lineWidth: 1)
                                 )
-                                .shadow(color: Self.warmAccent.opacity(0.08), radius: 12, x: 0, y: 6)
+                                .shadow(color: Color.fbAccent1.opacity(0.10), radius: 12, x: 0, y: 6)
                         }
                         .buttonStyle(SearchCardPressStyle())
                     }

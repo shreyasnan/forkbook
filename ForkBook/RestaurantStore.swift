@@ -158,6 +158,42 @@ class RestaurantStore: ObservableObject {
         }
     }
 
+    /// "I forgot to add some dishes" flow — append dishes to a place
+    /// without bumping visitCount or changing dateVisited. Updates the
+    /// rolled-up Restaurant locally + in Firestore, and fire-and-forget
+    /// patches the most-recent visit's dish snapshot so that visit's
+    /// detail card reflects the corrected list. New dishes only —
+    /// existing dishes (matched by lowercased name) are skipped so a
+    /// re-open of the editor doesn't duplicate.
+    func appendForgottenDishes(to restaurant: Restaurant, dishes: [DishItem]) {
+        guard let i = restaurants.firstIndex(where: { $0.id == restaurant.id }) else { return }
+        let existing = Set(restaurants[i].dishes.map { $0.name.lowercased() })
+        let toAdd = dishes.filter { !existing.contains($0.name.lowercased()) }
+        guard !toAdd.isEmpty else { return }
+
+        restaurants[i].dishes.append(contentsOf: toAdd)
+        save()
+        syncOne(restaurants[i])
+
+        // Patch the most-recent visit's dish snapshot. Fire-and-forget;
+        // a failure here doesn't affect the local store or the rolled-up
+        // restaurant doc, both of which are already consistent.
+        let restaurantId = restaurants[i].id
+        let circleId = FirestoreService.shared.primaryCircleId
+        guard let circleId, !circleId.isEmpty else { return }
+        Task {
+            do {
+                try await FirestoreService.shared.appendDishesToLatestVisit(
+                    restaurantId: restaurantId,
+                    circleId: circleId,
+                    dishes: toAdd
+                )
+            } catch {
+                print("[ForgottenDishes] failed to patch latest visit: \(error)")
+            }
+        }
+    }
+
     /// Quick-log a repeat visit: same reaction as last time, bump count.
     func quickLog(_ restaurant: Restaurant) {
         if let i = restaurants.firstIndex(where: { $0.id == restaurant.id }) {
@@ -283,10 +319,25 @@ class RestaurantStore: ObservableObject {
         let removed = beforeCount - restaurants.count
 
         // Import remotes that are missing locally.
+        //
+        // CRITICAL: preserve the Firestore doc ID as the local UUID.
+        // `syncRestaurant` writes to `circles/{cid}/restaurants/{uuid}`
+        // using `restaurant.id.uuidString` as the doc ID. If we mint a
+        // fresh UUID here, the next local edit will write to a brand-new
+        // doc instead of merging into the existing one — that's the
+        // feedback loop that ballooned Firestore from 2 → 1264 docs.
+        //
+        // Older docs created before this codepath are still UUID-keyed
+        // (Firestore has always stored them by `restaurant.id.uuidString`),
+        // so `UUID(uuidString:)` should always succeed; the fallback
+        // exists only for defensive paranoia (e.g. a doc someone created
+        // by hand in the console).
         var imported = 0
         for r in myRemote {
             if existingNames.contains(r.name.lowercased()) { continue }
+            let preservedId = UUID(uuidString: r.id) ?? UUID()
             let restaurant = Restaurant(
+                id: preservedId,
                 name: r.name,
                 address: r.address,
                 cuisine: r.cuisine,
@@ -296,7 +347,9 @@ class RestaurantStore: ObservableObject {
                 dishes: r.dishes,
                 dateVisited: r.dateVisited,
                 visitCount: r.visitCount,
-                reaction: r.rating >= 5 ? .loved : (r.rating >= 3 ? .liked : .meh)
+                reaction: r.rating >= 5 ? .loved : (r.rating >= 3 ? .liked : .meh),
+                latitude: r.latitude,
+                longitude: r.longitude
             )
             restaurants.append(restaurant)
             imported += 1

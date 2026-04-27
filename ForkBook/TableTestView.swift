@@ -19,6 +19,7 @@ struct TableTestView: View {
     /// Set when the user taps a row — presents the FriendProfileView
     /// sheet. CircleMember is Identifiable by uid.
     @State private var selectedFriend: FirestoreService.CircleMember? = nil
+    @State private var showAccount = false
     @ObservedObject private var firestoreService = FirestoreService.shared
 
     private var currentUid: String? { Auth.auth().currentUser?.uid }
@@ -72,12 +73,13 @@ struct TableTestView: View {
         .onChange(of: firestoreService.circlesVersion) { _, _ in
             Task { await loadTable() }
         }
+        .accountMenu(isPresented: $showAccount, store: store)
     }
 
     // MARK: Header
 
     private var header: some View {
-        HStack(alignment: .firstTextBaseline) {
+        HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
                 Text("Table")
                     .font(.system(size: 26, weight: .heavy))
@@ -90,6 +92,8 @@ struct TableTestView: View {
             }
 
             Spacer()
+
+            BurgerMenuButton { showAccount = true }
         }
     }
 

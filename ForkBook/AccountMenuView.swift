@@ -118,3 +118,64 @@ struct AccountMenuView: View {
     }
     .preferredColorScheme(.dark)
 }
+
+// MARK: - Burger Menu Button
+//
+// Top-right header affordance that opens the Account menu. Used by every
+// tab so the Account hub is reachable from anywhere in the app, not just
+// Home. Keeps the icon weight/size identical across tabs.
+
+struct BurgerMenuButton: View {
+    var action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(Color.fbText)
+                .frame(width: 36, height: 36)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Account Menu Presenter
+//
+// View modifier that hangs the Account menu off any view as a sheet. The
+// AccountMenuView uses NavigationLinks internally (Edit Profile, Manage
+// Table, etc.) so it MUST be wrapped in a NavigationStack — that's done
+// here so each tab doesn't have to wire its own. Sheet presentation
+// (vs. pushing onto the host's NavigationStack) keeps the behavior
+// identical across tabs that don't all have a NavigationStack at the
+// root, and matches the "modal settings" convention users expect.
+
+struct AccountMenuPresenter: ViewModifier {
+    @Binding var isPresented: Bool
+    var store: RestaurantStore
+
+    func body(content: Content) -> some View {
+        content
+            .sheet(isPresented: $isPresented) {
+                NavigationStack {
+                    AccountMenuView()
+                        .environmentObject(store)
+                        .toolbar {
+                            ToolbarItem(placement: .topBarTrailing) {
+                                Button("Done") { isPresented = false }
+                                    .foregroundColor(Color.fbText)
+                            }
+                        }
+                }
+            }
+    }
+}
+
+extension View {
+    /// Attach the Account menu sheet to any view. Pass the same `@State`
+    /// binding the BurgerMenuButton flips so tapping the icon presents
+    /// the menu.
+    func accountMenu(isPresented: Binding<Bool>, store: RestaurantStore) -> some View {
+        modifier(AccountMenuPresenter(isPresented: isPresented, store: store))
+    }
+}

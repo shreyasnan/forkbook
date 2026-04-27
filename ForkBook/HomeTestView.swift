@@ -180,11 +180,8 @@ struct HomeTestView: View {
                 .environmentObject(store)
                 .id(logPrefillName)   // force SwiftUI to create a fresh view
             }
-            .navigationDestination(isPresented: $showProfile) {
-                AccountMenuView()
-                    .environmentObject(store)
-            }
         }
+        .accountMenu(isPresented: $showProfile, store: store)
         .task {
             guard !hasLoaded else { return }
             hasLoaded = true
@@ -223,14 +220,7 @@ struct HomeTestView: View {
                     .foregroundColor(Color.fbText)
             }
             Spacer()
-            Button { showProfile = true } label: {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(Color.fbText)
-                    .frame(width: 36, height: 36)
-                    .contentShape(Rectangle())
-            }
-            .buttonStyle(.plain)
+            BurgerMenuButton { showProfile = true }
         }
     }
 
@@ -1045,10 +1035,12 @@ struct HomeTestView: View {
                 pendingAddPlaceAfterHeroDismiss = true
                 selectedHero = nil
             } label: {
-                // Equal visual weight with "Go here" — the primary
-                // action depends on whether the user is planning (Go)
-                // or logging (I went), and the UI shouldn't pre-bias
-                // that choice.
+                // Distinct hue from "Go here" (warm sand → planning) so
+                // users can tell forward-intent ("I'll go there") apart
+                // from backward-logging ("I was just there") at a
+                // glance. Both buttons keep the same shape/weight so
+                // neither dominates the layout — the difference is
+                // strictly in color.
                 Text("I went here")
                     .font(.system(size: 16, weight: .bold))
                     .foregroundStyle(Color.fbText)
@@ -1056,13 +1048,13 @@ struct HomeTestView: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Self.warmAccent.opacity(0.18))
+                            .fill(Color.fbAccent1.opacity(0.20))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Self.warmAccent.opacity(0.35), lineWidth: 1)
+                            .stroke(Color.fbAccent1.opacity(0.45), lineWidth: 1)
                     )
-                    .shadow(color: Self.warmAccent.opacity(0.08), radius: 12, x: 0, y: 6)
+                    .shadow(color: Color.fbAccent1.opacity(0.10), radius: 12, x: 0, y: 6)
             }
             .buttonStyle(HomeCardPressStyle())
 
