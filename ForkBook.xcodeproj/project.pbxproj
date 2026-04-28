@@ -55,6 +55,7 @@
 		D0AVATAR2F80000000000001 /* AvatarView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0AVATAR2F80000000000002 /* AvatarView.swift */; };
 		D0LOCMGR2F80000000000001 /* LocationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = D0LOCMGR2F80000000000002 /* LocationManager.swift */; };
 		F12D9A1B0001000000000001 /* FriendProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F12D9A1B0001000000000002 /* FriendProfileView.swift */; };
+		DD15A0010000000000000001 /* DishSelectionView.swift in Sources */ = {isa = PBXBuildFile; fileRef = DD15A0010000000000000002 /* DishSelectionView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -105,6 +106,7 @@
 		D0AVATAR2F80000000000002 /* AvatarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AvatarView.swift; sourceTree = "<group>"; };
 		D0LOCMGR2F80000000000002 /* LocationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocationManager.swift; sourceTree = "<group>"; };
 		F12D9A1B0001000000000002 /* FriendProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendProfileView.swift; sourceTree = "<group>"; };
+		DD15A0010000000000000002 /* DishSelectionView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DishSelectionView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -160,6 +162,7 @@
 				A20099002FA000000000000A /* SearchTestView.swift */,
 				A20099002FA000000000000C /* TableTestView.swift */,
 				F12D9A1B0001000000000002 /* FriendProfileView.swift */,
+				DD15A0010000000000000002 /* DishSelectionView.swift */,
 				C0C13E782F7EC84400A5DEFC /* AskForkBookService.swift */,
 				C0C13E802F7EC84500A5DEFC /* LocalSearchIndex.swift */,
 				D0AVATAR2F80000000000002 /* AvatarView.swift */,
@@ -291,6 +294,7 @@
 				A20099002FA0000000000009 /* SearchTestView.swift in Sources */,
 				A20099002FA000000000000B /* TableTestView.swift in Sources */,
 				F12D9A1B0001000000000001 /* FriendProfileView.swift in Sources */,
+				DD15A0010000000000000001 /* DishSelectionView.swift in Sources */,
 				A10023 /* DeepLinkManager.swift in Sources */,
 				A10011 /* ShareSheet.swift in Sources */,
 				A10012 /* Theme.swift in Sources */,

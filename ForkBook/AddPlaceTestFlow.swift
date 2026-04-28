@@ -34,11 +34,17 @@ struct AddPlaceTestFlow: View {
     @State private var selectedAddress = ""
     @State private var selectedCuisine: CuisineType = .other
 
-    // Step 1: dishes + inline verdict (combined)
-    @State private var suggestedDishes: [String] = []
-    @State private var selectedDishes: Set<String> = []
+    // Step 1: dishes + inline verdict. Selection state is split into
+    // a Set (what's picked) and a Dict (how each was rated) so a dish
+    // can sit in the "selected but not yet rated" state — required
+    // by the deliberate-rating UX in DishSelectionView. Suggestions
+    // are split into rich menu rows (when scraped data is available)
+    // and compact cuisine/curated chips.
+    @State private var menuSuggestions: [MenuDish] = []
+    @State private var chipSuggestions: [String] = []
+    @State private var selected: Set<String> = []
+    @State private var verdicts: [String: DishVerdict] = [:]
     @State private var customDishText = ""
-    @State private var dishVerdicts: [String: DishVerdict] = [:]
 
     // Step 2: note
     @State private var noteText = ""
@@ -71,9 +77,6 @@ struct AddPlaceTestFlow: View {
 
     // ── Colors ──
     private static let cardBg = Color(hex: "131517")
-    private static let verdictGetAgain = Color(hex: "C4A882")   // fbWarm
-    private static let verdictMaybe = Color(hex: "8E8E93")       // muted
-    private static let verdictSkip = Color(hex: "6B6560")        // muted warning
 
     var body: some View {
         NavigationStack {
@@ -169,14 +172,8 @@ struct AddPlaceTestFlow: View {
     // MARK: - Step 1: What did you have?
     // =========================================================================
 
-    // Hybrid model:
-    //   • Chips at top → selection only (tap to pick / unpick)
-    //   • Compact selected-dish rows below → explicit state pills
-    //   • Default verdict on selection = .getAgain (fast path)
-
     private var whatDidYouHaveScreen: some View {
         VStack(spacing: 0) {
-            // Header
             VStack(alignment: .leading, spacing: 4) {
                 Text("What did you have?")
                     .font(.system(size: 24, weight: .heavy))
@@ -189,99 +186,145 @@ struct AddPlaceTestFlow: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
             .padding(.top, 20)
-            .padding(.bottom, 24)
+            .padding(.bottom, 18)
 
             ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 0) {
-                    // Dish chips — selection only
-                    if !suggestedDishes.isEmpty {
-                        FlowLayout(spacing: 8) {
-                            ForEach(suggestedDishes, id: \.self) { dish in
-                                selectionChip(dish)
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
+                DishSelectionView(
+                    selected: $selected,
+                    verdicts: $verdicts,
+                    customText: $customDishText,
+                    menuSuggestions: $menuSuggestions,
+                    chipSuggestions: $chipSuggestions,
+                    onCustomSubmit: addCustomDish
+                )
+                .padding(.horizontal, 24)
+                .padding(.top, 4)
 
-                    // Selected dish rows
-                    if !selectedDishes.isEmpty {
-                        // Section label
-                        Text("SELECTED DISHES")
-                            .font(.system(size: 11, weight: .bold))
-                            .tracking(1.6)
-                            .foregroundStyle(Color(hex: "8E8E93"))
-                            .padding(.horizontal, 24)
-                            .padding(.top, 24)
-                            .padding(.bottom, 12)
-
-                        VStack(spacing: 0) {
-                            let sorted = Array(selectedDishes).sorted()
-                            ForEach(Array(sorted.enumerated()), id: \.element) { index, dish in
-                                selectedDishRow(dish)
-                                if index < sorted.count - 1 {
-                                    Rectangle()
-                                        .fill(Color.white.opacity(0.04))
-                                        .frame(height: 1)
-                                        .padding(.leading, 24)
-                                }
-                            }
-                        }
-                        .padding(.horizontal, 24)
-                    }
-
-                    // Custom dish input
-                    HStack(spacing: 10) {
-                        Image(systemName: "plus")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundStyle(Color.fbMuted2)
-                        TextField("Type a dish\u{2026}", text: $customDishText)
-                            .font(.system(size: 15))
-                            .foregroundStyle(Color.fbText)
-                            .submitLabel(.done)
-                            .onSubmit { addCustomDish() }
-
-                        if !customDishText.isEmpty {
-                            Button { addCustomDish() } label: {
-                                Text("Add")
-                                    .font(.system(size: 13, weight: .semibold))
-                                    .foregroundStyle(Color.fbWarm)
-                            }
-                        }
-                    }
-                    .padding(14)
-                    .background(Self.cardBg)
-                    .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                    )
-                    .padding(.horizontal, 24)
-                    .padding(.top, selectedDishes.isEmpty ? 14 : 20)
-
-                    Spacer(minLength: 120)
-                }
+                Spacer(minLength: 100)
             }
 
             Spacer()
 
-            // Next — always enabled. Picking dishes is encouraged but not
-            // required; users can advance and add dishes later or skip them
-            // entirely for places they only want to remember by name.
+            // Next — enabled when (a) no dishes selected (user is
+            // logging the visit without dish capture) OR (b) every
+            // selected dish has a verdict. Mirrors the deliberate
+            // capture rule in DishSelectionView's UI: half-rated
+            // batches don't ship.
             Button {
-                // Finalize: any selected dish without explicit verdict → getAgain
-                for dish in selectedDishes where dishVerdicts[dish] == nil {
-                    dishVerdicts[dish] = .getAgain
-                }
                 goForward(to: .anythingToRemember)
             } label: {
                 Text("Next")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(Color.fbText)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.fbWarm.opacity(0.18))
+                            .fill(Color.fbWarm.opacity(canAdvance ? 0.18 : 0.08))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.fbWarm.opacity(canAdvance ? 0.45 : 0.20), lineWidth: 1)
+                    )
+                    .opacity(canAdvance ? 1.0 : 0.6)
+            }
+            .buttonStyle(.plain)
+            .disabled(!canAdvance)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 40)
+        }
+    }
+
+    /// Step-1 advance gate. No selection = OK to continue (user is
+    /// logging the visit without recording dishes). Selection present
+    /// = every dish must have a verdict before moving on.
+    private var canAdvance: Bool {
+        selected.isEmpty || selected.allSatisfy { verdicts[$0] != nil }
+    }
+
+    // =========================================================================
+    // MARK: - Step 2: Anything to remember?
+    // =========================================================================
+
+    private var anythingToRememberScreen: some View {
+        VStack(spacing: 0) {
+            Text("Anything to remember?")
+                .font(.system(size: 24, weight: .heavy))
+                .tracking(-0.4)
+                .foregroundStyle(Color.fbText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, 24)
+                .padding(.top, 20)
+                .padding(.bottom, 18)
+
+            // Note input — small by default; users can tap into it and
+            // type freely. Removed the pre-filled suggestion pills
+            // ("Jay ordered for us", etc.) — they nudged users into
+            // canned phrases rather than letting them write what
+            // actually mattered.
+            ZStack(alignment: .topLeading) {
+                if noteText.isEmpty {
+                    Text("Rich broth, perfect egg\u{2026}")
+                        .font(.system(size: 15))
+                        .foregroundStyle(Color.fbMuted2)
+                        .padding(.horizontal, 18)
+                        .padding(.vertical, 14)
+                }
+                TextEditor(text: $noteText)
+                    .font(.system(size: 15))
+                    .foregroundStyle(Color.fbText)
+                    .scrollContentBackground(.hidden)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .frame(minHeight: 80)
+            }
+            .background(Self.cardBg)
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
+            )
+            .padding(.horizontal, 24)
+
+            Spacer()
+
+            // Skip — promoted to a real button so users see it as a
+            // valid choice, not a ghost link. Save is the warm-accent
+            // primary; Skip is a clearly-tappable secondary.
+            Button {
+                noteText = ""
+                saveVisit()
+            } label: {
+                Text("Skip")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundStyle(Color.fbMuted)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.white.opacity(0.04))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .stroke(Color.white.opacity(0.10), lineWidth: 1)
+                    )
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 24)
+            .padding(.bottom, 12)
+
+            // Save
+            Button {
+                saveVisit()
+            } label: {
+                Text("Save")
+                    .font(.system(size: 17, weight: .bold))
+                    .foregroundStyle(Color.fbText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14, style: .continuous)
+                            .fill(Color.fbWarm.opacity(0.20))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 14, style: .continuous)
@@ -294,233 +337,23 @@ struct AddPlaceTestFlow: View {
         }
     }
 
-    // ── Selection chip (pick/unpick only) ──
-
-    private func selectionChip(_ dish: String) -> some View {
-        let isSelected = selectedDishes.contains(dish)
-
-        return Button {
-            withAnimation(.easeInOut(duration: 0.12)) {
-                if isSelected {
-                    selectedDishes.remove(dish)
-                    dishVerdicts.removeValue(forKey: dish)
-                } else {
-                    selectedDishes.insert(dish)
-                    dishVerdicts[dish] = .getAgain
-                }
-            }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            Text(dish)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(isSelected ? Color.fbText : Color.fbMuted)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(isSelected
-                              ? Self.verdictGetAgain.opacity(0.15)
-                              : Color.white.opacity(0.06))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(isSelected
-                                ? Self.verdictGetAgain.opacity(0.40)
-                                : Color.white.opacity(0.22),
-                                lineWidth: 1)
-                )
-        }
-        .buttonStyle(ChipPressStyle())
-    }
-
-    // ── Compact selected-dish row ──
-
-    private func selectedDishRow(_ dish: String) -> some View {
-        let verdict = dishVerdicts[dish] ?? .getAgain
-
-        return HStack(spacing: 0) {
-            Text(dish)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.fbText)
-                .lineLimit(1)
-
-            Spacer(minLength: 12)
-
-            HStack(spacing: 6) {
-                statePill("Amazing", for: .getAgain, current: verdict, dish: dish)
-                statePill("Okay", for: .maybe, current: verdict, dish: dish)
-                statePill("Skip", for: .skip, current: verdict, dish: dish)
-            }
-        }
-        .padding(.vertical, 12)
-    }
-
-    // ── State pill ──
-
-    private func statePill(_ label: String, for verdict: DishVerdict, current: DishVerdict, dish: String) -> some View {
-        let isActive = current == verdict
-
-        let activeColor: Color = {
-            switch verdict {
-            case .getAgain: return Self.verdictGetAgain
-            case .maybe:    return Self.verdictMaybe
-            case .skip:     return Self.verdictSkip
-            }
-        }()
-
-        return Button {
-            withAnimation(.easeInOut(duration: 0.12)) {
-                dishVerdicts[dish] = verdict
-            }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            Text(label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(isActive ? activeColor : Color.fbMuted2.opacity(0.6))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(isActive ? activeColor.opacity(0.12) : Color.white.opacity(0.02))
-                )
-                .overlay(
-                    Capsule()
-                        .stroke(isActive ? activeColor.opacity(0.25) : Color.white.opacity(0.04), lineWidth: 1)
-                )
-        }
-        .buttonStyle(ChipPressStyle())
-    }
-
-    // =========================================================================
-    // MARK: - Step 2: Anything to remember?
-    // =========================================================================
-
-    private var anythingToRememberScreen: some View {
-        VStack(spacing: 0) {
-            // The title itself implies optional ("Anything..."), and the
-            // TextEditor placeholder shows the kind of note we want — no
-            // separate subtitle is needed.
-            Text("Anything to remember?")
-                .font(.system(size: 24, weight: .heavy))
-                .tracking(-0.4)
-                .foregroundStyle(Color.fbText)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.horizontal, 24)
-                .padding(.top, 20)
-                .padding(.bottom, 28)
-
-            // Note input
-            ZStack(alignment: .topLeading) {
-                if noteText.isEmpty {
-                    Text("Rich broth, perfect egg\u{2026}")
-                        .font(.system(size: 15))
-                        .foregroundStyle(Color.fbMuted2)
-                        .padding(.horizontal, 18)
-                        .padding(.vertical, 16)
-                }
-                TextEditor(text: $noteText)
-                    .font(.system(size: 15))
-                    .foregroundStyle(Color.fbText)
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 14)
-                    .padding(.vertical, 10)
-                    .frame(minHeight: 120)
-            }
-            .background(Self.cardBg)
-            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
-                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-            )
-            .padding(.horizontal, 24)
-
-            // Suggestion prompts
-            VStack(alignment: .leading, spacing: 8) {
-                noteSuggestion("Jay ordered for us")
-                noteSuggestion("Great quick lunch spot")
-                noteSuggestion("Skip the ramen next time")
-            }
-            .padding(.horizontal, 24)
-            .padding(.top, 16)
-
-            Spacer()
-
-            // Save
-            Button {
-                saveVisit()
-            } label: {
-                Text("Save")
-                    .font(.system(size: 16, weight: .bold))
-                    .foregroundStyle(Color.fbText)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .fill(Color.fbWarm.opacity(0.2))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14, style: .continuous)
-                            .stroke(Color.fbWarm.opacity(0.3), lineWidth: 1)
-                    )
-            }
-            .buttonStyle(.plain)
-            .padding(.horizontal, 24)
-            .padding(.bottom, 12)
-
-            // Skip
-            Button {
-                saveVisit()
-            } label: {
-                Text("Skip")
-                    .font(.system(size: 14, weight: .medium))
-                    .foregroundStyle(Color.fbMuted2)
-            }
-            .buttonStyle(.plain)
-            .padding(.bottom, 40)
-        }
-    }
-
-    private func noteSuggestion(_ text: String) -> some View {
-        Button {
-            if noteText.isEmpty {
-                noteText = text
-            } else {
-                noteText += ". " + text
-            }
-        } label: {
-            Text(text)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Color.fbMuted2)
-                .padding(.horizontal, 14)
-                .padding(.vertical, 8)
-                .background(Color.white.opacity(0.03))
-                .clipShape(Capsule())
-                .overlay(
-                    Capsule()
-                        .stroke(Color.white.opacity(0.04), lineWidth: 1)
-                )
-        }
-        .buttonStyle(.plain)
-    }
-
     // =========================================================================
     // MARK: - Step 3: Saved
     // =========================================================================
 
     private var savedScreen: some View {
         VStack(spacing: 0) {
-            Spacer()
+            Spacer().frame(height: 28)
 
-            // Quiet checkmark
             ZStack {
                 Circle()
-                    .fill(Color.fbWarm.opacity(0.1))
+                    .fill(Color.fbWarm.opacity(0.10))
                     .frame(width: 72, height: 72)
                 Image(systemName: "checkmark")
                     .font(.system(size: 26, weight: .bold))
                     .foregroundStyle(Color.fbWarm)
             }
-            .padding(.bottom, 20)
+            .padding(.bottom, 18)
 
             Text("Saved")
                 .font(.system(size: 22, weight: .heavy))
@@ -532,15 +365,29 @@ struct AddPlaceTestFlow: View {
                 .foregroundStyle(Color.fbMuted)
                 .padding(.top, 4)
 
-            // Go-to nudge
-            if showGoToNudge, let restaurant = savedRestaurant {
-                goToNudgeView(for: restaurant)
-                    .padding(.top, 28)
+            // Visit summary — rated dishes grouped by verdict so the
+            // user sees exactly what was captured (the whole point of
+            // the deliberate-rating UX is to make capture meaningful;
+            // surfacing that capture here closes the loop).
+            ScrollView {
+                VStack(spacing: 16) {
+                    if !savedDishesByVerdict.isEmpty {
+                        savedDishesSummary
+                    }
+                    if !noteText.isEmpty {
+                        savedNoteCard
+                    }
+
+                    if showGoToNudge, let restaurant = savedRestaurant {
+                        goToNudgeView(for: restaurant)
+                            .padding(.top, 4)
+                    }
+                }
+                .padding(.horizontal, 24)
+                .padding(.top, 28)
+                .padding(.bottom, 16)
             }
 
-            Spacer()
-
-            // Done
             Button {
                 // Fire the parent completion hook (e.g. to route back to Home
                 // from Search) before dismissing so the tab switch happens
@@ -549,7 +396,7 @@ struct AddPlaceTestFlow: View {
                 dismiss()
             } label: {
                 Text("Done")
-                    .font(.system(size: 16, weight: .bold))
+                    .font(.system(size: 17, weight: .bold))
                     .foregroundStyle(Color.fbText)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
@@ -564,24 +411,103 @@ struct AddPlaceTestFlow: View {
             }
             .buttonStyle(.plain)
             .padding(.horizontal, 24)
-            .padding(.bottom, 50)
+            .padding(.bottom, 40)
         }
     }
 
-    private func verdictLabel(_ v: DishVerdict) -> String {
-        switch v {
-        case .getAgain: return "Get again"
-        case .maybe:    return "Maybe"
-        case .skip:     return "Skip"
+    /// Group saved dishes by verdict for the summary on the saved screen.
+    /// Returns sections in display order — Loved, Okay, Didn't like —
+    /// skipping any empty verdicts.
+    private var savedDishesByVerdict: [(verdict: DishVerdict, label: String, dishes: [String])] {
+        var loved: [String] = []
+        var okay: [String] = []
+        var dislike: [String] = []
+        for name in selected.sorted() {
+            switch verdicts[name] {
+            case .getAgain: loved.append(name)
+            case .maybe:    okay.append(name)
+            case .skip:     dislike.append(name)
+            case nil:       continue
+            }
+        }
+        var sections: [(verdict: DishVerdict, label: String, dishes: [String])] = []
+        if !loved.isEmpty   { sections.append((.getAgain, "Loved", loved)) }
+        if !okay.isEmpty    { sections.append((.maybe, "Okay", okay)) }
+        if !dislike.isEmpty { sections.append((.skip, "Didn\u{2019}t like", dislike)) }
+        return sections
+    }
+
+    private var savedDishesSummary: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text("WHAT YOU ATE")
+                .font(.system(size: 12, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(Color.fbMuted2)
+
+            VStack(spacing: 10) {
+                ForEach(savedDishesByVerdict, id: \.verdict) { section in
+                    savedVerdictRow(label: section.label, verdict: section.verdict, dishes: section.dishes)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func savedVerdictRow(label: String, verdict: DishVerdict, dishes: [String]) -> some View {
+        let color = savedVerdictColor(verdict)
+        return HStack(alignment: .top, spacing: 12) {
+            Text(label)
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(color)
+                .frame(width: 80, alignment: .leading)
+                .padding(.top, 2)
+            Text(dishes.joined(separator: ", "))
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(Color.fbText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .multilineTextAlignment(.leading)
+        }
+        .padding(.vertical, 12)
+        .padding(.horizontal, 14)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .fill(color.opacity(0.10))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                .stroke(color.opacity(0.40), lineWidth: 1)
+        )
+    }
+
+    private func savedVerdictColor(_ verdict: DishVerdict) -> Color {
+        switch verdict {
+        case .getAgain: return Color.fbWarm
+        case .maybe:    return Color.fbMuted
+        case .skip:     return Color.fbRed
         }
     }
 
-    private func verdictColor(_ v: DishVerdict) -> Color {
-        switch v {
-        case .getAgain: return Self.verdictGetAgain
-        case .maybe:    return Self.verdictMaybe
-        case .skip:     return Self.verdictSkip
+    private var savedNoteCard: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("YOUR NOTE")
+                .font(.system(size: 12, weight: .bold))
+                .tracking(1.5)
+                .foregroundStyle(Color.fbMuted2)
+            Text(noteText)
+                .font(.system(size: 15, weight: .regular))
+                .foregroundStyle(Color.fbText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(Color.white.opacity(0.04))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+                )
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     // =========================================================================
@@ -703,9 +629,11 @@ struct AddPlaceTestFlow: View {
         // Save dish data. We pass `verdict` (3-way) through — DishItem's
         // initializer derives the legacy `liked` bool from it, so both the
         // old chip/summary code (which reads `liked`) and future
-        // verdict-aware views stay consistent.
-        for dish in selectedDishes {
-            let verdict = dishVerdicts[dish] ?? .getAgain
+        // verdict-aware views stay consistent. canAdvance gated the
+        // step transition, so by the time we're here every selected
+        // dish has a verdict.
+        for dish in selected {
+            guard let verdict = verdicts[dish] else { continue }
             if !restaurant.dishes.contains(where: { $0.name.lowercased() == dish.lowercased() }) {
                 restaurant.dishes.append(DishItem(name: dish, verdict: verdict))
             }
@@ -728,7 +656,7 @@ struct AddPlaceTestFlow: View {
     }
 
     /// Build the visit dish snapshot from the flow state and push it. We
-    /// use the flow's `dishVerdicts` dictionary directly rather than the
+    /// use the flow's `selected` dictionary directly rather than the
     /// restaurant's aggregated `dishes` array because a dish can exist on
     /// the restaurant from a prior visit — we want *this* visit's verdicts.
     private func logVisitToFirestore(for restaurant: Restaurant) {
@@ -742,8 +670,8 @@ struct AddPlaceTestFlow: View {
 
         // Reconstruct per-visit DishItems from the picked dishes + their
         // verdicts. Matches what a fresh Restaurant append would look like.
-        let visitDishes: [DishItem] = selectedDishes.map { name in
-            let verdict = dishVerdicts[name] ?? .getAgain
+        let visitDishes: [DishItem] = selected.compactMap { name in
+            guard let verdict = verdicts[name] else { return nil }
             return DishItem(name: name, verdict: verdict)
         }
 
@@ -772,12 +700,12 @@ struct AddPlaceTestFlow: View {
 
     /// Infer a place-level reaction from dish verdicts for backward compatibility
     private func inferReaction() -> Reaction? {
-        let verdicts = Array(dishVerdicts.values)
-        if verdicts.isEmpty { return .liked }
-        let getAgainCount = verdicts.filter { $0 == .getAgain }.count
-        let skipCount = verdicts.filter { $0 == .skip }.count
+        let values = selected.compactMap { verdicts[$0] }
+        if values.isEmpty { return .liked }
+        let getAgainCount = values.filter { $0 == .getAgain }.count
+        let skipCount = values.filter { $0 == .skip }.count
         if getAgainCount > 0 && skipCount == 0 { return .loved }
-        if skipCount == verdicts.count { return .meh }
+        if skipCount == values.count { return .meh }
         return .liked
     }
 
@@ -788,26 +716,29 @@ struct AddPlaceTestFlow: View {
     private func addCustomDish() {
         let trimmed = customDishText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        if !suggestedDishes.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
-            suggestedDishes.insert(trimmed, at: 0)
+        if !chipSuggestions.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
+            chipSuggestions.insert(trimmed, at: 0)
         }
-        selectedDishes.insert(trimmed)
-        dishVerdicts[trimmed] = .getAgain
+        // Add to selection without a default verdict — the user must
+        // rate it before Save unlocks. Same rule as
+        // suggestion-tap entries.
+        selected.insert(trimmed)
         customDishText = ""
     }
 
     private func loadDishSuggestions() {
         // Priority order:
-        //   1. Scraped menu items keyed by googlePlaceId (real data, async)
-        //   2. Curated per-restaurant list (RestaurantDishDB — small hand-picked set)
-        //   3. Cuisine defaults (PopularDishes)
+        //   1. Scraped menu items keyed by googlePlaceId (rich rows — async)
+        //   2. Curated per-restaurant list (RestaurantDishDB — chips)
+        //   3. Cuisine defaults (PopularDishes — chips)
         //
-        // We show the curated/cuisine set synchronously so the chips render
-        // immediately (no spinner), then merge menu items in at the top as
-        // soon as they arrive. Usually within ~100ms from disk cache, or
-        // one network round-trip on first view.
+        // Curated + cuisine fallbacks render synchronously so the picker
+        // never starts blank. The async path may add menu rows above
+        // them once the network round-trip returns; chips that overlap
+        // with menu items are pruned to avoid duplicates.
+        let menuKeys = Set(menuSuggestions.map { $0.name.lowercased() })
         var results: [String] = []
-        var seen = Set<String>()
+        var seen = menuKeys
 
         if let dishes = RestaurantDishDB.lookup(selectedName) {
             for d in dishes where !seen.contains(d.lowercased()) {
@@ -823,14 +754,14 @@ struct AddPlaceTestFlow: View {
             }
         }
 
-        suggestedDishes = Array(results.prefix(8))
+        chipSuggestions = Array(results.prefix(10))
 
-        // Async: fetch scraped menu and prepend to suggestions.
+        // Async: fetch scraped menu and patch in rich rows.
         Task { await loadMenuDishesAsync() }
     }
 
-    /// Fetch scraped menu items for the current prefill and prepend them
-    /// to `suggestedDishes`. Two paths:
+    /// Fetch scraped menu items for the current prefill and patch them
+    /// into `menuSuggestions` as rich rows. Two paths:
     ///
     ///   • **Already-saved restaurant** — look up `googlePlaceId` directly
     ///     from the store. No network call.
@@ -875,58 +806,30 @@ struct AddPlaceTestFlow: View {
         guard let placeId else { return }
         print("[MenuChips] fetching menu for '\(selectedName)' (placeId=\(placeId))")
 
-        // Cap at 10 scraped items — beyond that the chip wall gets
-        // overwhelming. The scraper already ordered by price desc so
-        // these are the mains.
-        let menuDishes = await MenuDataService.shared.dishNames(
-            forPlaceId: placeId, limit: 10
-        )
-        guard !menuDishes.isEmpty else {
-            print("[MenuChips] no menu dishes returned for placeId=\(placeId) — 404 or empty file")
+        // Pull the rich menu (name + description + price). Cap at 10
+        // items — beyond that the picker gets overwhelming. The scraper
+        // already orders by price desc so these are the mains.
+        guard let menu = await MenuDataService.shared.menu(forPlaceId: placeId) else {
+            print("[MenuChips] no menu returned for placeId=\(placeId) — 404 or empty file")
             return
         }
-        print("[MenuChips] merging \(menuDishes.count) real dishes into chips")
-
-        // Merge: scraped dishes first (real menu > curated), then the
-        // existing heuristic suggestions, deduped case-insensitively.
-        var seen = Set<String>()
-        var merged: [String] = []
-        for dish in menuDishes {
-            let lower = dish.lowercased()
-            if seen.contains(lower) { continue }
-            seen.insert(lower)
-            merged.append(dish)
+        let fresh = Array(menu.dishes.prefix(10))
+        guard !fresh.isEmpty else {
+            print("[MenuChips] menu fetched but contained no dishes for placeId=\(placeId)")
+            return
         }
-        for dish in suggestedDishes {
-            let lower = dish.lowercased()
-            if seen.contains(lower) { continue }
-            seen.insert(lower)
-            merged.append(dish)
+        print("[MenuChips] merging \(fresh.count) real dishes into picker")
+
+        // Promote real menu items to the rich-row section, and prune any
+        // chip suggestion that's now duplicated by a menu item (so the
+        // user doesn't see "Lamb Seekh Kebab" as both a row and a chip).
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                menuSuggestions = fresh
+                let menuKeys = Set(fresh.map { $0.name.lowercased() })
+                chipSuggestions.removeAll { menuKeys.contains($0.lowercased()) }
+            }
         }
-
-        // Cap at 12 when we have real data — a few more than the
-        // heuristic-only 8 to give real menu items room.
-        let capped = Array(merged.prefix(12))
-
-        // Animate the new chips in so users see a subtle "real menu
-        // loaded" affordance rather than a sudden jump.
-        withAnimation(.easeInOut(duration: 0.2)) {
-            suggestedDishes = capped
-        }
-    }
-}
-
-// =========================================================================
-// MARK: - Chip Press Style
-// =========================================================================
-
-/// Subtle scale + brightness on press — fast, no bounce
-private struct ChipPressStyle: ButtonStyle {
-    func makeBody(configuration: Configuration) -> some View {
-        configuration.label
-            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
-            .brightness(configuration.isPressed ? 0.02 : 0)
-            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
     }
 }
 

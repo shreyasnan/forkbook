@@ -729,6 +729,46 @@ class FirestoreService: ObservableObject {
             .addDocument(data: data)
     }
 
+    /// Permanently delete a restaurant and all its visit subdocs from
+    /// the circle. Used by the Place memory "Remove permanently" flow,
+    /// where the user has explicitly opted out of keeping the place in
+    /// their (and their circle's) history. Two phases:
+    ///
+    ///   1. Walk the visits subcollection and delete each doc — Firestore
+    ///      doesn't recursively delete subcollections client-side, so
+    ///      we have to do it ourselves.
+    ///   2. Delete the rolled-up restaurant doc.
+    ///
+    /// Failures partway through (e.g. network drop after some visits
+    /// are deleted) leave the restaurant doc behind, which a re-tap
+    /// of "Remove permanently" will clean up. The local store deletion
+    /// happens on the client first so the user sees immediate
+    /// feedback even if the cloud round-trip lags or fails.
+    func deleteRestaurantPermanently(restaurantId: UUID, circleId: String) async throws {
+        let restaurantRef = db.collection("circles").document(circleId)
+            .collection("restaurants").document(restaurantId.uuidString)
+
+        // 1. Delete all visit docs (paginated in case the history is long).
+        let visitsRef = restaurantRef.collection("visits")
+        var keepGoing = true
+        while keepGoing {
+            let snapshot = try await visitsRef.limit(to: 200).getDocuments()
+            if snapshot.documents.isEmpty {
+                keepGoing = false
+                break
+            }
+            let batch = db.batch()
+            for doc in snapshot.documents {
+                batch.deleteDocument(doc.reference)
+            }
+            try await batch.commit()
+            keepGoing = snapshot.documents.count == 200   // more may remain
+        }
+
+        // 2. Delete the rolled-up restaurant doc itself.
+        try await restaurantRef.delete()
+    }
+
     /// Patch the most-recent visit's dish list — used by the "I forgot to
     /// add some dishes" flow on Place memory. Looks up the newest visit by
     /// date and merges in the new dish payloads. We patch instead of

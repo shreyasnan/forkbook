@@ -66,6 +66,11 @@ struct MyPlacesTestView: View {
     /// right doc on save.
     @State private var addDishesTo: Restaurant? = nil
 
+    /// Set when the user taps "Remove permanently" — drives the
+    /// confirmation alert. Carries the Restaurant rather than just an
+    /// ID so the alert message can name the place.
+    @State private var pendingDelete: Restaurant? = nil
+
     private var currentUid: String? { Auth.auth().currentUser?.uid }
 
     // MARK: Routes
@@ -125,8 +130,43 @@ struct MyPlacesTestView: View {
             .environmentObject(store)
         }
         .sheet(item: $addDishesTo) { r in
-            AddForgottenDishesSheet(restaurant: r)
-                .environmentObject(store)
+            AddForgottenDishesSheet(restaurant: r) { count in
+                // Fire after the sheet dismisses — overlay toast on the
+                // place detail screen so the user sees the confirmation
+                // in the context where they took the action.
+                let label = "+\(count) dish\(count > 1 ? "es" : "") added to your last visit"
+                transientToast = label
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                    if transientToast == label { transientToast = nil }
+                }
+            }
+            .environmentObject(store)
+        }
+        .alert(
+            "Remove \(pendingDelete?.name ?? "this place")?",
+            isPresented: Binding(
+                get: { pendingDelete != nil },
+                set: { if !$0 { pendingDelete = nil } }
+            ),
+            presenting: pendingDelete
+        ) { restaurant in
+            Button("Remove", role: .destructive) {
+                store.deletePermanently(restaurant)
+                pendingDelete = nil
+                // Route back to home — the place detail screen we're
+                // standing on no longer has a backing restaurant.
+                withAnimation(.easeInOut(duration: 0.18)) {
+                    route = .home
+                }
+                let label = "Removed \(restaurant.name)"
+                transientToast = label
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.8) {
+                    if transientToast == label { transientToast = nil }
+                }
+            }
+            Button("Cancel", role: .cancel) { pendingDelete = nil }
+        } message: { _ in
+            Text("This deletes the place from your list and your circle's history. Your visit notes and dish ratings will be lost. This can\u{2019}t be undone.")
         }
         .overlay(alignment: .bottom) {
             if let toast = transientToast {
@@ -858,6 +898,30 @@ struct MyPlacesTestView: View {
                     Spacer(minLength: 0)
                 }
                 .padding(.horizontal, 16)
+
+                // Destructive action — visually separated from the
+                // normal actions so it doesn't read as just another
+                // routine option. Confirmation alert gates the actual
+                // delete.
+                Button {
+                    guard let r = restaurantByIdString(place.id) else { return }
+                    pendingDelete = r
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("Remove permanently")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundStyle(Color.fbRed.opacity(0.9))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 10)
+                    .background(Capsule().fill(Color.fbRed.opacity(0.10)))
+                    .overlay(Capsule().stroke(Color.fbRed.opacity(0.30), lineWidth: 1))
+                }
+                .buttonStyle(MyPlacesPressStyle())
+                .padding(.horizontal, 16)
+                .padding(.top, 26)
 
                 Spacer(minLength: 80)
             }
@@ -1658,6 +1722,7 @@ struct MyPlacesTestView: View {
             if !visit.dishes.isEmpty {
                 VStack(spacing: 8) {
                     ForEach(visit.dishes) { dish in
+                        let color = dishRatingColor(for: dish.verdict)
                         HStack {
                             Text(dish.name)
                                 .font(.system(size: 14, weight: .semibold))
@@ -1665,17 +1730,17 @@ struct MyPlacesTestView: View {
                             Spacer()
                             Text(dish.rating)
                                 .font(.system(size: 12, weight: .bold))
-                                .foregroundStyle(Color.fbWarm)
+                                .foregroundStyle(color)
                         }
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .background(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .fill(Color.white.opacity(0.03))
+                                .fill(color.opacity(0.08))
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                                .stroke(Color.white.opacity(0.05), lineWidth: 1)
+                                .stroke(color.opacity(0.30), lineWidth: 1)
                         )
                     }
                 }
@@ -1822,15 +1887,20 @@ struct MyPlacesTestView: View {
             heroNote = "One of your \(r.city) places."
         }
 
+        // Show all dishes (including ones marked "Didn't like") with each
+        // dish's OWN verdict — the previous code stamped the place-level
+        // reaction on every dish, which is why a dish marked "Okay"
+        // could render as "Amazing".
         let visit = VisitRecord(
             id: r.id.uuidString + "-v",
             title: r.visitCount >= 2 ? "Most recent visit" : "Only visit",
             timeAgo: r.relativeVisitDate,
-            dishes: Array(r.likedDishes.prefix(4)).map { d in
+            dishes: Array(r.dishes.prefix(4)).map { d in
                 DishRating(
                     id: d.id.uuidString,
                     name: d.name,
-                    rating: rating.isEmpty ? "Liked" : rating
+                    rating: dishRatingLabel(for: d),
+                    verdict: d.verdict
                 )
             }
         )
@@ -1851,12 +1921,41 @@ struct MyPlacesTestView: View {
         )
     }
 
+    /// Place-level rating label — used in the quick-row hero text on
+    /// My Places lists (e.g. "Loved" under the place name). Aligned
+    /// with the dish-verdict labels (Loved / Okay / Didn't like) so
+    /// the language is consistent everywhere.
     private func ratingText(for r: Restaurant) -> String {
         switch r.reaction {
-        case .loved: return "Amazing"
-        case .liked: return "Good"
+        case .loved: return "Loved"
+        case .liked: return "Liked"
         case .meh: return "Okay"
         case .none: return ""
+        }
+    }
+
+    /// Per-dish label for visit cards. Pulls from the dish's own
+    /// verdict — never from the place-level reaction. Falls back for
+    /// legacy DishItems that predate the 3-way verdict (verdict == nil)
+    /// using the legacy `liked` boolean.
+    private func dishRatingLabel(for d: DishItem) -> String {
+        switch d.verdict {
+        case .getAgain: return "Loved"
+        case .maybe:    return "Okay"
+        case .skip:     return "Didn\u{2019}t like"
+        case nil:       return d.liked ? "Liked" : ""
+        }
+    }
+
+    /// Per-verdict color for the visit-card dish row. Matches the
+    /// DishSelectionView palette so a dish reads with the same color
+    /// in the picker as it does in My Places later.
+    fileprivate func dishRatingColor(for verdict: DishVerdict?) -> Color {
+        switch verdict {
+        case .getAgain: return Color.fbWarm
+        case .maybe:    return Color.fbMuted
+        case .skip:     return Color.fbRed
+        case nil:       return Color.fbWarm   // legacy "Liked" stays warm
         }
     }
 
@@ -1900,6 +1999,9 @@ struct DishRating: Identifiable, Equatable {
     let id: String
     let name: String
     let rating: String
+    /// Original verdict so the visit card can color-code per dish. nil
+    /// for legacy DishItems written before we tracked verdicts.
+    let verdict: DishVerdict?
 }
 
 struct SuggestedQuery: Identifiable {
@@ -1944,16 +2046,24 @@ struct AddForgottenDishesSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     let restaurant: Restaurant
+    /// Called with the count of dishes added when the user saves. Parent
+    /// uses this to surface a transient toast after the sheet dismisses.
+    /// Fires only on actual save; cancel skips it.
+    var onSave: ((Int) -> Void)? = nil
 
-    @State private var suggested: [String] = []
     @State private var selected: Set<String> = []
     @State private var verdicts: [String: DishVerdict] = [:]
-    @State private var customDishText: String = ""
+    @State private var customText: String = ""
+    @State private var menuSuggestions: [MenuDish] = []
+    @State private var chipSuggestions: [String] = []
 
-    // Match AddPlaceTestFlow's verdict palette so the pills look identical.
-    private static let verdictGetAgain = Color(hex: "C4A882")   // fbWarm
-    private static let verdictMaybe = Color(hex: "8E8E93")
-    private static let verdictSkip = Color(hex: "6B6560")
+    private var selectedCount: Int { selected.count }
+    private var canSave: Bool {
+        !selected.isEmpty && selected.allSatisfy { verdicts[$0] != nil }
+    }
+    private var saveLabel: String {
+        selectedCount > 0 ? "Save (\(selectedCount))" : "Save"
+    }
 
     var body: some View {
         NavigationStack {
@@ -1971,68 +2081,14 @@ struct AddForgottenDishesSheet: View {
                                 .foregroundStyle(Color.fbMuted)
                         }
 
-                        if !suggested.isEmpty {
-                            FlowLayout(spacing: 8) {
-                                ForEach(suggested, id: \.self) { dish in
-                                    suggestionChip(dish)
-                                }
-                            }
-                        } else {
-                            Text("No suggestions to show — add a dish below.")
-                                .font(.system(size: 13, weight: .medium))
-                                .foregroundStyle(Color.fbMuted2)
-                        }
-
-                        // Custom dish input — same shape as AddPlaceTestFlow's
-                        // so the affordance feels consistent across screens.
-                        HStack(spacing: 10) {
-                            TextField("Add a dish…", text: $customDishText)
-                                .font(.system(size: 15, weight: .medium))
-                                .foregroundStyle(Color.fbText)
-                                .padding(.horizontal, 14)
-                                .padding(.vertical, 12)
-                                .background(Capsule().fill(Color.white.opacity(0.05)))
-                                .overlay(Capsule().stroke(Color.white.opacity(0.10), lineWidth: 1))
-                                .submitLabel(.done)
-                                .onSubmit(addCustomDish)
-
-                            Button(action: addCustomDish) {
-                                Image(systemName: "plus")
-                                    .font(.system(size: 14, weight: .bold))
-                                    .foregroundColor(Color.fbText)
-                                    .frame(width: 36, height: 36)
-                                    .background(Circle().fill(Self.verdictGetAgain.opacity(0.18)))
-                                    .overlay(Circle().stroke(Self.verdictGetAgain.opacity(0.40), lineWidth: 1))
-                            }
-                            .disabled(customDishText.trimmingCharacters(in: .whitespaces).isEmpty)
-                            .opacity(customDishText.trimmingCharacters(in: .whitespaces).isEmpty ? 0.4 : 1.0)
-                        }
-
-                        if !selected.isEmpty {
-                            // Sort for a stable order — Set<String> has
-                            // no inherent order, and SwiftUI re-renders
-                            // would otherwise shuffle the rows on each
-                            // state change.
-                            let sortedSelected = selected.sorted()
-                            VStack(spacing: 0) {
-                                ForEach(Array(sortedSelected.enumerated()), id: \.element) { idx, dish in
-                                    selectedDishRow(dish)
-                                    if idx < sortedSelected.count - 1 {
-                                        Divider().background(Color.white.opacity(0.05))
-                                    }
-                                }
-                            }
-                            .padding(.vertical, 6)
-                            .padding(.horizontal, 14)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .fill(Color.white.opacity(0.03))
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
-                                    .stroke(Color.white.opacity(0.06), lineWidth: 1)
-                            )
-                        }
+                        DishSelectionView(
+                            selected: $selected,
+                            verdicts: $verdicts,
+                            customText: $customText,
+                            menuSuggestions: $menuSuggestions,
+                            chipSuggestions: $chipSuggestions,
+                            onCustomSubmit: addCustomDish
+                        )
 
                         Spacer(minLength: 80)
                     }
@@ -2047,180 +2103,113 @@ struct AddForgottenDishesSheet: View {
                         .foregroundColor(Color.fbMuted)
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button("Save") { save() }
-                        .foregroundColor(selected.isEmpty ? Color.fbMuted2 : Self.verdictGetAgain)
-                        .disabled(selected.isEmpty)
+                    Button(saveLabel) { save() }
+                        .foregroundColor(canSave ? Color.fbWarm : Color.fbMuted2)
+                        .disabled(!canSave)
                 }
             }
-            .onAppear(perform: loadSuggestions)
-        }
-    }
-
-    // MARK: - Subviews
-
-    private func suggestionChip(_ dish: String) -> some View {
-        let isSelected = selected.contains(dish)
-        return Button {
-            withAnimation(.easeInOut(duration: 0.12)) {
-                if isSelected {
-                    selected.remove(dish)
-                    verdicts.removeValue(forKey: dish)
-                } else {
-                    selected.insert(dish)
-                    verdicts[dish] = .getAgain
-                }
-            }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            Text(dish)
-                .font(.system(size: 15, weight: .medium))
-                .foregroundStyle(isSelected ? Color.fbText : Color.fbMuted)
-                .padding(.horizontal, 18)
-                .padding(.vertical, 11)
-                .background(
-                    Capsule().fill(
-                        isSelected
-                            ? Self.verdictGetAgain.opacity(0.15)
-                            : Color.white.opacity(0.06)
-                    )
-                )
-                .overlay(
-                    Capsule().stroke(
-                        isSelected
-                            ? Self.verdictGetAgain.opacity(0.40)
-                            : Color.white.opacity(0.22),
-                        lineWidth: 1
-                    )
-                )
-        }
-        .buttonStyle(MyPlacesPressStyle())
-    }
-
-    private func selectedDishRow(_ dish: String) -> some View {
-        let verdict = verdicts[dish] ?? .getAgain
-        return HStack(spacing: 0) {
-            Text(dish)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(Color.fbText)
-                .lineLimit(1)
-            Spacer(minLength: 12)
-            HStack(spacing: 6) {
-                statePill("Amazing", for: .getAgain, current: verdict, dish: dish)
-                statePill("Okay", for: .maybe, current: verdict, dish: dish)
-                statePill("Skip", for: .skip, current: verdict, dish: dish)
+            .onAppear {
+                loadSuggestionsSync()
+                Task { await loadMenuAsync() }
             }
         }
-        .padding(.vertical, 10)
-    }
-
-    private func statePill(_ label: String, for verdict: DishVerdict, current: DishVerdict, dish: String) -> some View {
-        let isActive = current == verdict
-        let activeColor: Color = {
-            switch verdict {
-            case .getAgain: return Self.verdictGetAgain
-            case .maybe:    return Self.verdictMaybe
-            case .skip:     return Self.verdictSkip
-            }
-        }()
-        return Button {
-            withAnimation(.easeInOut(duration: 0.12)) {
-                verdicts[dish] = verdict
-            }
-            UIImpactFeedbackGenerator(style: .light).impactOccurred()
-        } label: {
-            Text(label)
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundStyle(isActive ? activeColor : Color.fbMuted2.opacity(0.6))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Capsule().fill(isActive ? activeColor.opacity(0.12) : Color.white.opacity(0.02)))
-                .overlay(Capsule().stroke(isActive ? activeColor.opacity(0.25) : Color.white.opacity(0.04), lineWidth: 1))
-        }
-        .buttonStyle(MyPlacesPressStyle())
     }
 
     // MARK: - Actions
 
     private func addCustomDish() {
-        let trimmed = customDishText.trimmingCharacters(in: .whitespaces)
+        let trimmed = customText.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return }
-        // Skip dishes already on the restaurant — the whole sheet is for
-        // adding what's missing, so silently no-op rather than confuse
-        // the user with a duplicate.
-        let alreadyOnRestaurant = restaurant.dishes.contains { $0.name.lowercased() == trimmed.lowercased() }
+        // Skip if it's already on the restaurant (whole point of the
+        // sheet is "what's missing") or already in the chip cloud.
+        let alreadyOnRestaurant = restaurant.dishes.contains {
+            $0.name.lowercased() == trimmed.lowercased()
+        }
         if alreadyOnRestaurant {
-            customDishText = ""
+            customText = ""
             return
         }
-        if !suggested.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
-            suggested.insert(trimmed, at: 0)
+        if !chipSuggestions.contains(where: { $0.lowercased() == trimmed.lowercased() }) {
+            chipSuggestions.insert(trimmed, at: 0)
         }
+        // Add to selection without a default verdict — the user must
+        // explicitly rate it before save unlocks. Same rule as
+        // suggestion-tap entries.
         selected.insert(trimmed)
-        verdicts[trimmed] = .getAgain
-        customDishText = ""
+        customText = ""
     }
 
     private func save() {
-        let dishes: [DishItem] = selected.map { name in
-            let verdict = verdicts[name] ?? .getAgain
+        // canSave guarantees every selected name has a verdict; the
+        // compactMap is belt-and-suspenders against any future code
+        // path that bypasses the gate.
+        let dishes: [DishItem] = selected.compactMap { name in
+            guard let verdict = verdicts[name] else { return nil }
             return DishItem(name: name, verdict: verdict)
         }
+        let count = dishes.count
         store.appendForgottenDishes(to: restaurant, dishes: dishes)
+        onSave?(count)
         dismiss()
     }
 
     // MARK: - Suggestion loading
     //
-    // Same priority order as AddPlaceTestFlow.loadDishSuggestions, but
-    // post-filtered against the restaurant's existing dishes — the whole
-    // point of the sheet is "what's missing", so showing already-logged
-    // dishes is noise.
+    // Sync first (warm caches), then async fetch if the menu isn't in
+    // memory yet. Pre-filtered against the restaurant's existing dishes
+    // — the whole point of the sheet is "what's missing".
 
-    private func loadSuggestions() {
-        var results: [String] = []
-        var seen = Set<String>()
-        let alreadyOnRestaurant = Set(restaurant.dishes.map { $0.name.lowercased() })
+    private func loadSuggestionsSync() {
+        let existing = Set(restaurant.dishes.map { $0.name.lowercased() })
 
-        // 1. Cached menu items keyed by Place ID, if any. No await — if
-        //    the menu isn't cached we just fall through; the user can
-        //    type custom dishes.
         if let placeId = restaurant.googlePlaceId, !placeId.isEmpty {
-            let menuDishes = MenuDataService.shared.cachedDishes(forPlaceId: placeId)
-            for d in menuDishes {
-                let key = d.name.lowercased()
-                if !seen.contains(key) && !alreadyOnRestaurant.contains(key) {
-                    seen.insert(key)
-                    results.append(d.name)
-                }
-            }
-            // Fire a prefetch so a re-open after the network round-trip
-            // shows the menu suggestions too.
-            MenuDataService.shared.prefetch(placeId: placeId)
+            let cached = MenuDataService.shared.cachedDishes(forPlaceId: placeId)
+            menuSuggestions = cached
+                .filter { !existing.contains($0.name.lowercased()) }
+                .prefix(8)
+                .map { $0 }
         }
 
-        // 2. Curated per-restaurant list (small hand-picked set).
+        let menuKeys = Set(menuSuggestions.map { $0.name.lowercased() })
+        var chips: [String] = []
+        var seen = existing.union(menuKeys)
+
         if let curated = RestaurantDishDB.lookup(restaurant.name) {
-            for d in curated {
-                let key = d.lowercased()
-                if !seen.contains(key) && !alreadyOnRestaurant.contains(key) {
-                    seen.insert(key)
-                    results.append(d)
-                }
+            for d in curated where !seen.contains(d.lowercased()) {
+                seen.insert(d.lowercased())
+                chips.append(d)
             }
         }
 
-        // 3. Cuisine defaults.
         if restaurant.cuisine != .other {
-            for d in PopularDishes.dishes(for: restaurant.cuisine) {
-                let key = d.lowercased()
-                if !seen.contains(key) && !alreadyOnRestaurant.contains(key) {
-                    seen.insert(key)
-                    results.append(d)
-                }
+            for d in PopularDishes.dishes(for: restaurant.cuisine) where !seen.contains(d.lowercased()) {
+                seen.insert(d.lowercased())
+                chips.append(d)
             }
         }
 
-        suggested = Array(results.prefix(12))
+        chipSuggestions = Array(chips.prefix(10))
+    }
+
+    private func loadMenuAsync() async {
+        guard let placeId = restaurant.googlePlaceId, !placeId.isEmpty else { return }
+        guard menuSuggestions.isEmpty else { return }   // already have it from cache
+        guard let menu = await MenuDataService.shared.menu(forPlaceId: placeId) else { return }
+
+        let existing = Set(restaurant.dishes.map { $0.name.lowercased() })
+        let fresh = menu.dishes
+            .filter { !existing.contains($0.name.lowercased()) }
+            .prefix(8)
+            .map { $0 }
+
+        guard !fresh.isEmpty else { return }
+        await MainActor.run {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                menuSuggestions = fresh
+                let menuKeys = Set(fresh.map { $0.name.lowercased() })
+                chipSuggestions.removeAll { menuKeys.contains($0.lowercased()) }
+            }
+        }
     }
 }
 

@@ -38,7 +38,36 @@ class RestaurantStore: ObservableObject {
         // Note: we intentionally don't delete the Firestore doc — circle
         // history is shared/append-flavored, and the UI treats the local
         // store as the source of truth for "what I see". A dedicated
-        // un-share flow would remove the remote doc explicitly.
+        // un-share flow (deletePermanently) removes the remote doc
+        // explicitly when the user really wants the place gone.
+    }
+
+    /// Remove a restaurant entirely — local AND cloud. Used by the
+    /// "Remove permanently" action on Place memory. Local deletion
+    /// happens first so the user sees immediate feedback; the
+    /// Firestore cleanup is fire-and-forget, but failures are logged
+    /// because re-running the action will clean up any remnants.
+    func deletePermanently(_ restaurant: Restaurant) {
+        let id = restaurant.id
+        restaurants.removeAll { $0.id == id }
+        save()
+
+        let circleId = FirestoreService.shared.primaryCircleId
+        guard let circleId, !circleId.isEmpty else {
+            // Not signed in or no circle yet — local delete is enough;
+            // the doc never existed in the cloud.
+            return
+        }
+        Task {
+            do {
+                try await FirestoreService.shared.deleteRestaurantPermanently(
+                    restaurantId: id,
+                    circleId: circleId
+                )
+            } catch {
+                print("[Delete] failed to remove '\(restaurant.name)' from Firestore: \(error)")
+            }
+        }
     }
 
     func delete(at offsets: IndexSet, in list: [Restaurant]) {
